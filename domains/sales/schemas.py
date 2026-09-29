@@ -1,0 +1,1 @@
+"""Pydantic models for the data entering and leaving the sales domain. (ensures the data has the necessary structure needed)"""

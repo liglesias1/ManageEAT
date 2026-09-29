@@ -1,0 +1,1 @@
+"""Pydantic models for the data entering and leaving the personnel domain."""

@@ -1,0 +1,1 @@
+"""SQL queries of the personnel domain. Only reads and writes data, no calculations."""

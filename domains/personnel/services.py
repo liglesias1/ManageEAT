@@ -1,0 +1,1 @@
+"""Business logic of the personnel domain. Only calculations, no SQL."""
