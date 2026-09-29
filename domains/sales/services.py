@@ -1,0 +1,1 @@
+'''Buisness logic of the sales domain, makes calculations, no queries to the database.'''

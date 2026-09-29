@@ -1,0 +1,1 @@
+"""SQL that creates the tables owned by the personnel domain (roles, employees)."""

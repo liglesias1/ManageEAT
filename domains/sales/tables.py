@@ -1,0 +1,1 @@
+''' SQL that creates the tables owned by the sales domain (menu items, ingredients, recipes, suppliers, stock, fixed expenses).'''

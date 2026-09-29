@@ -1,0 +1,1 @@
+'''SQL queies of the sales domain, makes no calculations, just queries the tables. (reads and writes data)'''
