@@ -1,25 +1,7 @@
-annotated-doc==0.0.5
-annotated-types==0.7.0
-anyio==4.12.1
-click==8.1.8
-coverage==7.10.7
-exceptiongroup==1.3.1
-fastapi==0.128.8
-h11==0.16.0
-idna==3.20
-iniconfig==2.1.0
-Jinja2==3.1.6
-MarkupSafe==3.0.3
-packaging==26.3
-pluggy==1.6.0
-pydantic==2.13.5
-pydantic_core==2.46.5
-Pygments==2.21.0
-pytest==8.4.2
-pytest-cov==7.1.0
-python-multipart==0.0.20
-starlette==0.49.3
-tomli==2.4.1
-typing-inspection==0.4.2
-typing_extensions==4.16.0
-uvicorn==0.39.0
+fastapi==0.128.8 #el framework web.
+uvicorn==0.39.0 #servidor que ejecuta la app de fastapi.
+Jinja2==3.1.6 #plantillas HTML para la app web.
+python-multipart==0.0.20 #permite recibir formularios, como el de gastos fijos.
+httpx==0.28.1 #lo usa FastAPI para simular peticiones en los tests.
+pytest==8.4.2 #Los tests se ejecutan con pytest.
+pytest-cov==7.1.0 #pytest-cov es un plugin de pytest que permite medir la cobertura de código de los tests.

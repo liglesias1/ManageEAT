@@ -1,6 +1,7 @@
-""" este archivo se conecta a la base de datos SQLite y crea las tablas."""
-
 """SQLite connection helpers shared by every domain."""
+
+#este archivo se conecta a la base de datos SQLite y crea las tablas.
+
 import sqlite3 #allows to connect to SQLite databases and execute SQL queries.
 
 import config #ruta de la base de datos, que aparece en el archivo config.py

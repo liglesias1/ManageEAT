@@ -22,6 +22,14 @@ MENU = {
     "CER01": ("drink", 3.50),
 }
 
+# How often each dish is chosen within its category (higher = more popular)
+POPULARITY = {
+    "SAL01": 3, "CRO01": 5, "GAZ01": 2,
+    "PAE01": 6, "SOL01": 2, "ENT01": 3, "HAM01": 5, "RIS01": 1.5,
+    "TAR01": 3, "FLA01": 2,
+    "AGU01": 4, "VIN01": 3, "CER01": 4,
+}
+
 # Relative weight of orders at each opening hour (lunch 13-15h, dinner 20-23h)
 HOURLY_WEIGHT = {13: 3, 14: 6, 15: 3, 20: 2, 21: 6, 22: 5, 23: 1}
 
@@ -35,6 +43,10 @@ SHIFT_HOURS = {"lunch": (12, 16), "dinner": (19, 24)}
 def _dishes(category):
     return [code for code, (cat, _) in MENU.items() if cat == category]
 
+def _pick(rng, category):
+    """Chooses a dish of the category, favouring the most popular ones."""
+    dishes = _dishes(category)
+    return rng.choices(dishes, [POPULARITY[code] for code in dishes])[0]
 
 def _orders_for_day(rng, day):
     """Returns a list of (order_datetime, covers, items) for one day."""
@@ -50,11 +62,11 @@ def _orders_for_day(rng, day):
         covers = rng.randint(1, 6)
         items = {}
         for _ in range(covers):
-            picks = [rng.choice(_dishes("main")), rng.choice(_dishes("drink"))]
+            picks = [_pick(rng, "main"), _pick(rng, "drink")]
             if rng.random() < 0.5:
-                picks.append(rng.choice(_dishes("starter")))
+                picks.append(_pick(rng, "starter"))
             if rng.random() < 0.4:
-                picks.append(rng.choice(_dishes("dessert")))
+                picks.append(_pick(rng, "dessert"))
             for code in picks:
                 items[code] = items.get(code, 0) + 1
         orders.append((when, covers, items))

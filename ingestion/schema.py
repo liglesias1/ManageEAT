@@ -1,14 +1,14 @@
-#ponemos todo el SQL en una variable de texto de Python (input_schema) para que app.py la importe  y se la pase a init_db, que la sabe ejecutar
-# orders: cada comanda
-#orders_items:contenidos de la comanda
-# clock_ins: fichajes, quien ficho y a que hora entro/salio
-
-
 """Input data produced by the restaurant's existing systems (POS and clock-in app).
 
 ManageEAT only READS these tables. They belong to neither domain: both the sales
 and the personnel domain read them, and neither writes to them.
 """
+
+#ponemos todo el SQL en una variable de texto de Python (input_schema) para que app.py la importe  y se la pase a init_db, que la sabe ejecutar
+# orders: cada comanda
+# order_items:contenidos de la comanda
+# clock_ins: fichajes, quien ficho y a que hora entro/salio
+
 
 INPUT_SCHEMA = """
 CREATE TABLE IF NOT EXISTS orders (
