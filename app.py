@@ -6,13 +6,22 @@ import uvicorn #the server that runs the FastAPI application
 from fastapi import FastAPI #the web framework that allows to create the API endpoints and handle requests and responses.
 
 import config
+from database import get_connection, init_db
 from domains.personnel.routes import router as personnel_router #les cambia los nombres pq sino chocarían los routers de los dos dominios, pq ambos se llaman router.
 from domains.sales.routes import router as sales_router
-
+from ingestion.schema import INPUT_SCHEMA 
+from ingestion.seed import seed_if_empty
 
 @asynccontextmanager
 async def lifespan(app):
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    conn = get_connection()  # NEW
+    try:  # NEW
+        init_db(conn, [INPUT_SCHEMA])  
+        if config.SEED_DEMO_DATA:  
+            seed_if_empty(conn)  
+    finally:  # NEW
+        conn.close()  
     yield
 
 
