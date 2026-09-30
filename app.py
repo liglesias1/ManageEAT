@@ -15,12 +15,12 @@ from ingestion.seed import seed_if_empty
 @asynccontextmanager
 async def lifespan(app):
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = get_connection()  # NEW
-    try:  # NEW
+    conn = get_connection()  
+    try:  
         init_db(conn, [INPUT_SCHEMA])  
         if config.SEED_DEMO_DATA:  
             seed_if_empty(conn)  
-    finally:  # NEW
+    finally:  
         conn.close()  
     yield
 
