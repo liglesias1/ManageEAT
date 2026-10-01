@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Menu performance{% endblock %}
+{% block heading %}Menu performance{% endblock %}
+{% block intro %}
+Which dishes sell, which ones make money, and what to do with each.
+Every dish is compared only with the other dishes of its category.
+{% endblock %}
+
+{% block content %}
+<section class="kpis">
+  <div class="kpi highlight">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Revenue
+    </div>
+    <div class="value">{{ summary.revenue | eur }}</div>
+    <div class="note">All dishes and drinks sold</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></svg>
+      Gross margin
+    </div>
+    <div class="value">{{ summary.gross_margin | eur }}</div>
+    <div class="note">Revenue minus ingredient cost</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+      Food cost
+    </div>
+    <div class="value">{{ "%.1f" | format(summary.food_cost_pct) }}%</div>
+    <div class="note">Share of revenue spent on ingredients</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+      Best-selling dish
+    </div>
+    <div class="value" style="font-size:19px">{{ summary.best_seller }}</div>
+    <div class="note">Least ordered: {{ summary.least_ordered }}</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Popularity vs. margin</h2>
+  <p class="hint">
+    Each dot is a dish. Dashed lines mark the popularity threshold and the average margin of the category.
+    <span class="badge star">Star</span> sells well, high margin ·
+    <span class="badge plowhorse">Plowhorse</span> sells well, low margin ·
+    <span class="badge puzzle">Puzzle</span> high margin, rarely ordered ·
+    <span class="badge dog">Dog</span> low sales, low margin
+  </p>
+
+  <div class="tabs">
+    {% for category, dishes in by_category.items() if dishes %}
+    <button class="tab {{ 'active' if loop.first else '' }}" data-category="{{ category }}">{{ category | capitalize }}s</button>
+    {% endfor %}
+  </div>
+
+  {% for category, dishes in by_category.items() if dishes %}
+  <div class="tab-panel {{ 'active' if loop.first else '' }}" id="panel-{{ category }}">
+    <div class="chart-box"><canvas id="chart-{{ category }}"></canvas></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Dish</th>
+          <th class="num">Sold</th>
+          <th class="num">Price</th>
+          <th class="num">Cost</th>
+          <th class="num">Margin</th>
+          <th>Class</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dish in dishes %}
+        <tr>
+          <td>{{ dish.name }}<span class="dish-note">{{ dish.recommendation }}</span></td>
+          <td class="num">{{ dish.units_sold }}</td>
+          <td class="num">{{ dish.avg_price | eur }}</td>
+          <td class="num">{{ dish.unit_cost | eur }}</td>
+          <td class="num">{{ dish.margin | eur }}</td>
+          <td><span class="badge {{ dish.class }}">{{ dish.class | capitalize }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+
+<script>
+  const byCategory = {{ by_category | tojson }};
+  const style = getComputedStyle(document.documentElement);
+  const colour = (cls) => style.getPropertyValue("--" + cls).trim();
+  // Rounds an axis limit up to a "nice" number (e.g. 1,880 -> 2,000) so the ticks read well
+  const niceCeil = (v) => { const step = 10 ** Math.floor(Math.log10(v)) / 2; return Math.ceil(v / step) * step; };
+
+  // Writes each dish's name next to its dot, and the quadrant names in the corners
+  const labels = {
+    id: "labels",
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea: area } = chart;
+      ctx.save();
+      ctx.font = "600 11px sans-serif";
+      ctx.fillStyle = "#b3bcb8";
+      ctx.textAlign = "right";
+      ctx.fillText("STARS", area.right - 8, area.top + 16);
+      ctx.fillText("PLOWHORSES", area.right - 8, area.bottom - 8);
+      ctx.textAlign = "left";
+      ctx.fillText("PUZZLES", area.left + 8, area.top + 16);
+      ctx.fillText("DOGS", area.left + 8, area.bottom - 8);
+
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "#1f2623";
+      chart.getDatasetMeta(0).data.forEach((point, i) => {
+        const name = chart.data.datasets[0].data[i].name;
+        const nearRightEdge = point.x > area.right - 130;
+        ctx.textAlign = nearRightEdge ? "right" : "left";
+        ctx.fillText(name, point.x + (nearRightEdge ? -11 : 11), point.y + 4);
+      });
+      ctx.restore();
+    },
+  };
+
+  function drawChart(category) {
+    const dishes = byCategory[category];
+    const xs = dishes.map(d => d.units_sold);
+    const ys = dishes.map(d => d.margin);
+    const threshold = dishes[0].popularity_threshold;
+    const avgMargin = dishes[0].average_margin;
+    const xMax = niceCeil(Math.max(...xs, threshold) * 1.1);
+    const yMin = Math.floor(Math.min(...ys, avgMargin) - 1);
+    const yMax = Math.ceil(Math.max(...ys, avgMargin) + 1);
+    const dashed = { type: "line", borderColor: "#b3bcb8", borderDash: [5, 5], borderWidth: 1, pointRadius: 0 };
+
+    new Chart(document.getElementById("chart-" + category), {
+      type: "scatter",
+      plugins: [labels],
+      data: {
+        datasets: [
+          {
+            data: dishes.map(d => ({ x: d.units_sold, y: d.margin, name: d.name })),
+            backgroundColor: dishes.map(d => colour(d.class)),
+            pointRadius: 7,
+            pointHoverRadius: 9,
+          },
+          { ...dashed, data: [{ x: threshold, y: yMin }, { x: threshold, y: yMax }] },
+          { ...dashed, data: [{ x: 0, y: avgMargin }, { x: xMax, y: avgMargin }] },
+        ],
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            filter: (item) => item.datasetIndex === 0,
+            callbacks: { label: (c) => `${c.raw.name}: ${c.raw.x} sold, €${c.raw.y.toFixed(2)} margin` },
+          },
+        },
+        scales: {
+          x: { min: 0, max: xMax, title: { display: true, text: "Units sold" } },
+          y: { min: yMin, max: yMax, title: { display: true, text: "Margin per dish (€)" } },
+        },
+      },
+    });
+  }
+
+  // Tabs: a chart is only drawn the first time its tab is opened (hidden canvases have no size)
+  const drawn = new Set();
+  function showCategory(category) {
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.category === category));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + category));
+    if (!drawn.has(category)) { drawChart(category); drawn.add(category); }
+  }
+  document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => showCategory(t.dataset.category)));
+  showCategory(document.querySelector(".tab").dataset.category);
+</script>
+{% endblock %}

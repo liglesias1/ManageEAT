@@ -45,5 +45,24 @@ def classify_menu(dishes):
             else:
                 dish["class"] = "dog"
             dish["recommendation"] = RECOMMENDATIONS[dish["class"]]
+            dish["popularity_threshold"] = popularity_threshold
+            dish["average_margin"] = average_margin
             result.append(dish)
     return result
+
+
+def menu_summary(dishes):
+    """Key figures for the whole menu, from the output of classify_menu."""
+    revenue = sum(d["revenue"] for d in dishes)
+    ingredient_cost = sum(d["unit_cost"] * d["units_sold"] for d in dishes)
+    # Drinks always sell the most units, so best/least ordered only look at food
+    food = [d for d in dishes if d["category"] != "drink"]
+    return {
+        "revenue": revenue,
+        "ingredient_cost": ingredient_cost,
+        "gross_margin": revenue - ingredient_cost,
+        "food_cost_pct": ingredient_cost / revenue * 100 if revenue else 0.0,
+        "best_seller": max(food, key=lambda d: d["units_sold"])["name"] if food else None,
+        "least_ordered": min(food, key=lambda d: d["units_sold"])["name"] if food else None,
+        "class_counts": {c: sum(1 for d in dishes if d["class"] == c) for c in RECOMMENDATIONS},
+    }
