@@ -13,3 +13,5 @@
 | 2026-09-30 / 2cfb50a | Claude | Implement menu engineering (star, plowhorse, puzzle, dog) and its unit tests | Accepted | | |
 | 2026-10-01 | Claude | Build the base page layout and the menu performance page with charts | Modified | I changed the colour palette  and layout with one tab per category and the dish name next to each point. | |
 | 2026-10-01 | Claude | Write the designed tests and design more for the repository and the pages using an in-memory database | Accepted | | |
+| 2026-10-01 | Claude | Design the personnel tables (roles with hourly rate and capacity, employees) and their demo data | Modified | Kept my decision of one role per employee and pay per role. Added covers_per_hour and min_staff to roles so the schedule can be calculated from demand | |
+| 2026-10-01 | Claude | Help me find why the personnel tests were not running | Accepted | The file was wrongly named, so pytest did not collect it | |
