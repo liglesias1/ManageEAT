@@ -1,4 +1,4 @@
-from domains.sales.services import classify_menu
+from domains.sales.services import classify_menu, menu_summary
 
 
 def dish(code, units, revenue, cost, category="main"):
@@ -54,3 +54,34 @@ def test_every_dish_gets_a_recommendation():
 
 def test_empty_menu_returns_empty_list():
     assert classify_menu([]) == []
+
+
+def test_thresholds_are_attached_to_each_dish():
+    result = by_code(classify_menu([dish("A", 30, 600, 5), dish("B", 10, 100, 5)]))
+    # 40 units / 2 dishes * 0.7 = 14 units; average margin (450 + 50) / 40 = 12.5
+    assert result["A"]["popularity_threshold"] == 14
+    assert result["A"]["average_margin"] == 12.5
+
+
+def test_menu_summary_totals_and_best_seller():
+    dishes = classify_menu([
+        dish("Paella", 10, 200, 5),
+        dish("Risotto", 2, 30, 3),
+        dish("Water", 50, 125, 0.5, category="drink"),
+    ])
+    summary = menu_summary(dishes)
+    assert summary["revenue"] == 355
+    assert summary["ingredient_cost"] == 81          # 10*5 + 2*3 + 50*0.5
+    assert summary["gross_margin"] == 274
+    assert round(summary["food_cost_pct"], 1) == 22.8
+    # Drinks are ignored for best and least ordered, otherwise Water would always win
+    assert summary["best_seller"] == "Paella"
+    assert summary["least_ordered"] == "Risotto"
+    assert sum(summary["class_counts"].values()) == 3
+
+
+def test_menu_summary_with_no_sales():
+    summary = menu_summary([])
+    assert summary["revenue"] == 0
+    assert summary["food_cost_pct"] == 0
+    assert summary["best_seller"] is None
