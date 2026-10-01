@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 import config
 from database import get_connection, init_db
 from domains.sales.tables import SALES_SCHEMA
+from domains.personnel.tables import PERSONNEL_SCHEMA
 from ingestion.schema import INPUT_SCHEMA
 
 
@@ -12,7 +13,7 @@ from ingestion.schema import INPUT_SCHEMA
 def conn():
     """An empty in-memory database with all the tables created."""
     connection = get_connection(":memory:")
-    init_db(connection, [INPUT_SCHEMA, SALES_SCHEMA])
+    init_db(connection, [INPUT_SCHEMA, SALES_SCHEMA, PERSONNEL_SCHEMA])
     yield connection
     connection.close()
 
