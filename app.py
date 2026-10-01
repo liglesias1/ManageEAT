@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 
 import uvicorn  # the server that runs the FastAPI application
 from fastapi import FastAPI  # the web framework that creates the endpoints and handles requests and responses
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 import config
 from database import get_connection, init_db
@@ -31,6 +33,12 @@ async def lifespan(app):
 app = FastAPI(title="ManageEAT", lifespan=lifespan)
 app.include_router(sales_router)
 app.include_router(personnel_router)
+app.mount("/static", StaticFiles(directory=str(config.BASE_DIR / "static")), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def home():
+    return RedirectResponse(url="/sales/menu")
 
 
 @app.get("/health")

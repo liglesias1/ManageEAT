@@ -1,0 +1,134 @@
+/* ManageEAT: calm, readable and warm. Beige base, olive sidebar, one maroon accent. */
+:root {
+  --bg: #f1efe8;
+  --surface: #fffdf9;
+  --ink: #2b2925;
+  --muted: #6f6a60;
+  --line: #e2ded4;
+  --sidebar: #5d6b4f;
+  --sidebar-ink: #eef0e8;
+  --accent: #7d2633;
+
+  --star: #2f7a4a;      --star-bg: #e3f2e7;
+  --plowhorse: #8a6110; --plowhorse-bg: #fbefd3;
+  --puzzle: #2c5d8f;    --puzzle-bg: #e2ecf7;
+  --dog: #a3392e;       --dog-bg: #f8e1dd;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Sidebar: stays in place while the page scrolls */
+.sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 28px 18px;
+  background: var(--sidebar);
+  color: var(--sidebar-ink);
+}
+.brand { display: block; font-size: 22px; font-weight: 700; color: #fff; text-decoration: none; }
+.brand span { color: #f6c76e; }
+.brand-sub { margin: 2px 0 28px; font-size: 12px; opacity: 0.7; }
+.nav-group {
+  margin: 22px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--sidebar-ink);
+  text-decoration: none;
+}
+.sidebar nav a:hover { background: rgba(255, 255, 255, 0.08); }
+.sidebar nav a.active { background: rgba(255, 255, 255, 0.14); color: #fff; font-weight: 600; }
+.sidebar nav svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.85; }
+
+/* Page: uses the full width of the screen */
+.content { flex: 1; min-width: 0; padding: 32px 40px; }
+.page-header h1 { margin: 0; font-size: 26px; }
+.page-intro { margin: 6px 0 28px; color: var(--muted); max-width: 720px; }
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-bottom: 22px;
+}
+.card h2 { margin: 0 0 4px; font-size: 17px; }
+.card .hint { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+
+/* Key figures */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 22px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+.kpi .label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.kpi .label svg { width: 18px; height: 18px; color: var(--accent); }
+.kpi .value { font-size: 24px; font-weight: 700; margin-top: 2px; }
+.kpi .note { font-size: 12px; color: var(--muted); }
+.kpi.highlight { border-top: 3px solid var(--accent); }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); font-size: 13px; }
+
+/* Class badges */
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.badge.star { color: var(--star); background: var(--star-bg); }
+.badge.plowhorse { color: var(--plowhorse); background: var(--plowhorse-bg); }
+.badge.puzzle { color: var(--puzzle); background: var(--puzzle-bg); }
+.badge.dog { color: var(--dog); background: var(--dog-bg); }
+
+/* Tabs: one per category; the chart sits next to its table */
+.tabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.tab {
+  padding: 8px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab:hover { color: var(--ink); }
+.tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 28px; align-items: start; }
+.dish-note { display: block; font-size: 12px; color: var(--muted); }
+
+/* Charts */
+.chart-box { position: relative; height: 380px; }
