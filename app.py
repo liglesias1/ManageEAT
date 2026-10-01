@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 import config
 from database import get_connection, init_db
 from domains.personnel.routes import router as personnel_router  # se renombran porque los dos routers se llaman "router" y chocarían
+from domains.personnel.seed import seed_personnel_if_empty
+from domains.personnel.tables import PERSONNEL_SCHEMA
 from domains.sales.routes import router as sales_router
 from domains.sales.seed import seed_sales_if_empty
 from domains.sales.tables import SALES_SCHEMA
@@ -21,10 +23,11 @@ async def lifespan(app):
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = get_connection()
     try:
-        init_db(conn, [INPUT_SCHEMA, SALES_SCHEMA])
+        init_db(conn, [INPUT_SCHEMA, SALES_SCHEMA, PERSONNEL_SCHEMA])
         if config.SEED_DEMO_DATA:
             seed_if_empty(conn)
             seed_sales_if_empty(conn)
+            seed_personnel_if_empty(conn)
     finally:
         conn.close()
     yield
