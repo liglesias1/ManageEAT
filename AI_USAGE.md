@@ -18,3 +18,6 @@
 
 | 2026-10-02 | Claude | Calculate staff demand per hour and compare recommended vs. actual staff from clock-ins | Modified | The AI proposed 3 roles (waiter, kitchen, bar) with 12 diners per waiter. I replaced them with the six roles a real restaurant uses (waiter, runner, bar, pass, cook, dishwasher) and set waiter capacity to 30 diners per hour | |
 | 2026-10-02 | Claude | Build the staff and schedule page with a demand heatmap and staffing gaps per role | Accepted | | |
+
+| 2026-10-02 | Claude | Calculate payroll from clocked hours and expose a labor_cost() function for the sales domain | Modified | Kept my decision of paying clocked hours at a single rate per role, with no overtime premium, and added a test that documents it. labor_cost() is the single, explicit seam between the two domains (see ADR-2): sales gets the total wage cost from it instead of reading personnel's tables | |
+| 2026-10-02 | Claude | Build the payroll page with cost per role and pay per employee | Accepted | | |

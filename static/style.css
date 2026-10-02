@@ -142,3 +142,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .day-panel.active { display: block; }
 .staff-short { background: var(--dog-bg); color: var(--dog); font-weight: 600; }
 .staff-extra { background: var(--plowhorse-bg); color: var(--plowhorse); font-weight: 600; }
+
+
+/* Two cards side by side */
+.split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 22px; align-items: start; }
+.chart-box.small { height: 220px; margin-bottom: 12px; }
