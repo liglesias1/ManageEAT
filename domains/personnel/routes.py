@@ -4,13 +4,17 @@ from fastapi.responses import HTMLResponse
 
 from database import get_connection
 from domains.personnel import repository
+
 from domains.personnel.services import (
     WEEKDAYS,
     average_demand,
     average_staff_on_shift,
     build_schedule,
+    calculate_payroll,
+    payroll_by_role,
     schedule_summary,
 )
+
 from web import templates
 
 router = APIRouter(prefix="/personnel", tags=["personnel"])
@@ -43,5 +47,31 @@ def schedule_page(request: Request):
             "by_day": by_day,
             "roles": [role["name"] for role in roles],
             "summary": schedule_summary(schedule),
+        },
+    )
+
+
+
+@router.get("/payroll", response_class=HTMLResponse)
+def payroll_page(request: Request):
+    conn = get_connection()
+    try:
+        start, end = repository.get_clock_in_period(conn)
+        shifts = repository.get_worked_shifts(conn, start, end) if start else []
+    finally:
+        conn.close()
+
+    payroll = calculate_payroll(shifts)
+    by_role = payroll_by_role(payroll)
+    return templates.TemplateResponse(
+        request,
+        "personnel/payroll.html",
+        {
+            "start": start,
+            "end": end,
+            "payroll": payroll,
+            "by_role": by_role,
+            "total_pay": sum(p["pay"] for p in payroll),
+            "total_hours": sum(p["hours"] for p in payroll),
         },
     )

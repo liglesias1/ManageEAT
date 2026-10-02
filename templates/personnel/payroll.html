@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Payroll{% endblock %}
+{% block heading %}Payroll{% endblock %}
+{% block intro %}
+Hours each employee clocked and what they are owed, from {{ start or "–" }} to {{ end or "–" }}.
+Pay = clocked hours × the hourly rate of the employee's role. Extra hours are paid at the same rate.
+{% endblock %}
+
+{% block content %}
+<section class="kpis">
+  <div class="kpi highlight">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>
+      Total labour cost
+    </div>
+    <div class="value">{{ total_pay | eur }}</div>
+    <div class="note">Wages for the whole period</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      Hours worked
+    </div>
+    <div class="value">{{ "{:,.0f}".format(total_hours) }}</div>
+    <div class="note">Clocked by all employees</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>
+      Employees
+    </div>
+    <div class="value">{{ payroll | length }}</div>
+    <div class="note">With at least one shift</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></svg>
+      Average cost per hour
+    </div>
+    <div class="value">{{ (total_pay / total_hours if total_hours else 0) | eur }}</div>
+    <div class="note">Across all roles</div>
+  </div>
+</section>
+
+<div class="split">
+  <section class="card">
+    <h2>Cost by role</h2>
+    <p class="hint">Where the wage bill goes.</p>
+    <div class="chart-box small"><canvas id="role-chart"></canvas></div>
+    <table>
+      <thead>
+        <tr><th>Role</th><th class="num">People</th><th class="num">Hours</th><th class="num">Pay</th></tr>
+      </thead>
+      <tbody>
+        {% for role in by_role %}
+        <tr>
+          <td>{{ role.role }}</td>
+          <td class="num">{{ role.people }}</td>
+          <td class="num">{{ "%.0f" | format(role.hours) }}</td>
+          <td class="num">{{ role.pay | eur }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Employees</h2>
+    <p class="hint">Grouped by role.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Role</th>
+          <th class="num">Shifts</th>
+          <th class="num">Hours</th>
+          <th class="num">Rate</th>
+          <th class="num">Pay</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for person in payroll %}
+        <tr>
+          <td>{{ person.employee }}</td>
+          <td class="muted">{{ person.role }}</td>
+          <td class="num">{{ person.shifts }}</td>
+          <td class="num">{{ "%.1f" | format(person.hours) }}</td>
+          <td class="num">{{ person.hourly_rate | eur }}</td>
+          <td class="num"><strong>{{ person.pay | eur }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<script>
+  const byRole = {{ by_role | tojson }};
+  new Chart(document.getElementById("role-chart"), {
+    type: "bar",
+    data: {
+      labels: byRole.map(r => r.role),
+      datasets: [{ data: byRole.map(r => r.pay), backgroundColor: "#7d2633", borderRadius: 6 }],
+    },
+    options: {
+      indexAxis: "y",
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => "€" + c.raw.toFixed(2) } } },
+      scales: { x: { ticks: { callback: (v) => "€" + v.toLocaleString() } } },
+    },
+  });
+</script>
+{% endblock %}
