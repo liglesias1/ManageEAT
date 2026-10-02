@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from domains.sales.repository import get_dish_sales
+from domains.sales.repository import add_supplier, get_dish_sales, get_last_order_day, get_stock_levels, get_suppliers
 from domains.sales.seed import seed_sales_if_empty
 
 
@@ -61,3 +61,25 @@ def test_demo_data_loads_once(conn):
 def test_supplier_needs_phone_or_email(conn):
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO suppliers (name, lead_time_days) VALUES ('No contact', 2)")
+
+
+
+def test_stock_levels_count_only_usage_since_the_stocktake(conn):
+    add_menu(conn)                                     # rice counted on 2026-09-01, 0.5 kg per risotto
+    conn.execute("UPDATE ingredients SET counted_at = '2026-09-05' WHERE name = 'Rice'")
+    conn.execute("INSERT INTO orders VALUES (1, 1, 2, '2026-09-04T14:00:00')")   # before the count
+    conn.execute("INSERT INTO order_items (order_id, item_code, quantity, unit_price) VALUES (1, 'RIS01', 4, 16)")
+    conn.execute("INSERT INTO orders VALUES (2, 1, 2, '2026-09-06T14:00:00')")   # after the count
+    conn.execute("INSERT INTO order_items (order_id, item_code, quantity, unit_price) VALUES (2, 'RIS01', 2, 16)")
+
+    rice = {i["name"]: i for i in get_stock_levels(conn)}["Rice"]
+    assert rice["used_since_count"] == pytest.approx(1.0)   # only the 2 risottos after the count
+    assert rice["supplier"] == "Supplier"
+    assert get_last_order_day(conn) == "2026-09-06"
+
+
+def test_add_supplier_and_list_suppliers(conn):
+    add_supplier(conn, "Huerta", None, "ventas@huerta.es", 1)
+    suppliers = get_suppliers(conn)
+    assert [s["name"] for s in suppliers] == ["Huerta"]
+    assert suppliers[0]["ingredients"] == 0
