@@ -23,3 +23,5 @@
 | 2026-10-02 | Claude | Build the payroll page with cost per role and pay per employee | Accepted | | |
 | 2026-10-02 | Claude | Calculate current stock, daily use and reorder alerts from the last stocktake and recipes | Modified | I asked for ingredients to be flagged not only when they are below the minimum, but also when they will run out before the supplier can deliver. The demo stocktake values were adjusted because the first version flagged 12 of 18 ingredients | |
 | 2026-10-02 | Claude | Build the inventory page with a form to add suppliers, validated with Pydantic | Modified | I asked to show which ingredients each supplier sells instead of a count, to choose them when adding a supplier, and to add a page per supplier with prices and spend. A purchase order history was left for a later version | |
+
+| 2026-10-02 | Claude | Add a purchase history per supplier and a form to record deliveries | Modified | I asked for a supplier profile page with order history, prices and contact details. Deliveries received after the last stocktake are now added to the stock. Supplier contracts were left out of scope | |
