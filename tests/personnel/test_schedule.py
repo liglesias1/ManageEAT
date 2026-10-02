@@ -4,7 +4,9 @@ from domains.personnel.services import (
     average_demand,
     average_staff_on_shift,
     build_schedule,
+    schedule_summary,
     staff_needed,
+    staffing_status,
 )
 
 WAITER = {"id": 1, "name": "Waiter", "covers_per_hour": 12, "min_staff": 1}
@@ -66,3 +68,26 @@ def test_role_with_nobody_on_shift_counts_as_zero():
     slot = build_schedule({(0, 13): 10}, {}, [WAITER])[0]
     assert slot["roles"][0]["actual"] == 0
     assert slot["roles"][0]["gap"] == 1
+
+
+
+def test_staffing_status():
+    assert staffing_status(2) == "short"
+    assert staffing_status(0.5) == "short"     # missing half the days on average
+    assert staffing_status(0.2) == "ok"
+    assert staffing_status(-0.5) == "ok"
+    assert staffing_status(-1) == "extra"
+
+
+def test_schedule_summary_finds_peak_and_gaps():
+    demand = {(4, 14): 20, (4, 21): 50}
+    staff = {(4, 14, 1): 1, (4, 21, 1): 3, (4, 14, 3): 3, (4, 21, 3): 2}
+    summary = schedule_summary(build_schedule(demand, staff, [WAITER, BAR]))
+    assert (summary["peak"]["day_name"], summary["peak"]["hour"]) == ("Friday", 21)
+    assert summary["short"] == 2        # waiter at 14h (2 needed, 1 there) and at 21h (5 needed, 3 there)
+    assert summary["extra"] == 1        # bar at 14h (1 needed, 3 there)
+    assert summary["most_missing_role"] == "Waiter"
+
+
+def test_schedule_summary_without_data():
+    assert schedule_summary([]) == {"peak": None, "short": 0, "extra": 0, "most_missing_role": None}

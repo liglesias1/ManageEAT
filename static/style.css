@@ -132,3 +132,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Charts */
 .chart-box { position: relative; height: 380px; }
+
+
+/* Heatmap and staffing cells */
+.heatmap th { text-transform: none; letter-spacing: 0; }
+.heatmap tbody th { color: var(--ink); font-size: 14px; border-bottom: 1px solid var(--line); }
+.heatmap td { text-align: center; font-weight: 600; border: 2px solid var(--surface); border-radius: 6px; }
+.day-panel { display: none; }
+.day-panel.active { display: block; }
+.staff-short { background: var(--dog-bg); color: var(--dog); font-weight: 600; }
+.staff-extra { background: var(--plowhorse-bg); color: var(--plowhorse); font-weight: 600; }

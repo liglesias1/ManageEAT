@@ -51,6 +51,15 @@ def staff_needed(covers, role):
     return max(role["min_staff"], math.ceil(covers / role["covers_per_hour"]))
 
 
+def staffing_status(gap):
+    """'short' if at least half a person is missing on average, 'extra' if a whole person is spare, else 'ok'."""
+    if gap >= 0.5:
+        return "short"
+    if gap <= -1:
+        return "extra"
+    return "ok"
+
+
 def build_schedule(demand, staff, roles):
     """Recommended vs. actual staff for every opening hour, with the gap for each role.
 
@@ -67,6 +76,26 @@ def build_schedule(demand, staff, roles):
                 "needed": needed,
                 "actual": actual,
                 "gap": needed - actual,
+                "status": staffing_status(needed - actual),
             })
         schedule.append(slot)
     return schedule
+
+
+
+def schedule_summary(schedule):
+    """Key figures for the schedule page: the busiest hour and how many role-slots are short or over-staffed."""
+    if not schedule:
+        return {"peak": None, "short": 0, "extra": 0, "most_missing_role": None}
+    peak = max(schedule, key=lambda slot: slot["covers"])
+    cells = [cell for slot in schedule for cell in slot["roles"]]
+    missing = defaultdict(float)
+    for cell in cells:
+        if cell["status"] == "short":
+            missing[cell["role"]] += cell["gap"]
+    return {
+        "peak": peak,
+        "short": sum(1 for cell in cells if cell["status"] == "short"),
+        "extra": sum(1 for cell in cells if cell["status"] == "extra"),
+        "most_missing_role": max(missing, key=missing.get) if missing else None,
+    }

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Staff & schedule{% endblock %}
+{% block heading %}Staff & schedule{% endblock %}
+{% block intro %}
+When the restaurant is busiest and how many people each role needs at every hour,
+compared with the staff that actually clocked in. Averages for each weekday over the whole period.
+{% endblock %}
+
+{% block content %}
+<section class="kpis">
+  <div class="kpi highlight">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      Busiest hour
+    </div>
+    {% if summary.peak %}
+    <div class="value" style="font-size:19px">{{ summary.peak.day_name }} {{ summary.peak.hour }}:00</div>
+    <div class="note">{{ "%.0f" | format(summary.peak.covers) }} diners on average</div>
+    {% else %}<div class="value">–</div>{% endif %}
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      Understaffed
+    </div>
+    <div class="value">{{ summary.short }}</div>
+    <div class="note">Hour and role combinations short of people</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>
+      Overstaffed
+    </div>
+    <div class="value">{{ summary.extra }}</div>
+    <div class="note">Hour and role combinations with at least one person spare</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+      Most needed role
+    </div>
+    <div class="value" style="font-size:19px">{{ summary.most_missing_role or "None" }}</div>
+    <div class="note">Role with the largest shortfall overall</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Demand by day and hour</h2>
+  <p class="hint">Average number of diners. The darker the cell, the busier the restaurant.</p>
+  <table class="heatmap">
+    <thead>
+      <tr>
+        <th></th>
+        {% for hour in hours %}<th class="num">{{ hour }}:00</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for day in weekdays %}
+      <tr>
+        <th>{{ day }}</th>
+        {% for hour in hours %}
+        {% set covers = demand.get((weekdays.index(day), hour), 0) %}
+        {% set level = covers / max_covers if max_covers else 0 %}
+        <td class="num" style="background: rgba(125, 38, 51, {{ '%.2f' | format(0.08 + level * 0.85) }}); color: {{ '#fff' if level > 0.5 else 'inherit' }}">
+          {{ "%.0f" | format(covers) }}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Recommended vs. actual staff</h2>
+  <p class="hint">
+    Each cell shows <strong>needed / on shift</strong> for that role and hour.
+    <span class="badge dog">Short</span> people are missing ·
+    <span class="badge plowhorse">Extra</span> at least one person spare
+  </p>
+
+  <div class="tabs">
+    {% for day in weekdays if by_day[day] %}
+    <button class="tab {{ 'active' if loop.first else '' }}" data-day="{{ day }}">{{ day }}</button>
+    {% endfor %}
+  </div>
+
+  {% for day in weekdays if by_day[day] %}
+  <div class="day-panel {{ 'active' if loop.first else '' }}" id="day-{{ day }}">
+    <table>
+      <thead>
+        <tr>
+          <th>Hour</th>
+          <th class="num">Diners</th>
+          {% for role in roles %}<th class="num">{{ role }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for slot in by_day[day] %}
+        <tr>
+          <td>{{ slot.hour }}:00</td>
+          <td class="num">{{ "%.0f" | format(slot.covers) }}</td>
+          {% for cell in slot.roles %}
+          <td class="num staff-{{ cell.status }}">{{ cell.needed }} / {{ "%.1f" | format(cell.actual) | replace(".0", "") }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+
+<script>
+  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab));
+    document.querySelectorAll(".day-panel").forEach(p => p.classList.toggle("active", p.id === "day-" + tab.dataset.day));
+  }));
+</script>
+{% endblock %}
