@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block heading %}Inventory{% endblock %}
+{% block intro %}
+Stock left of every ingredient, worked out from the last stocktake and what the recipes used since then,
+and what to order before it runs out. Figures as of {{ as_of or "–" }}.
+{% endblock %}
+
+{% block content %}
+<section class="kpis">
+  <div class="kpi highlight">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      To reorder
+    </div>
+    <div class="value">{{ summary.to_reorder }}</div>
+    <div class="note">Low, or will run out before a delivery arrives</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+      Out of stock
+    </div>
+    <div class="value">{{ summary.out_of_stock }}</div>
+    <div class="note">Ingredients already used up</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>
+      Stock value
+    </div>
+    <div class="value">{{ summary.stock_value | eur }}</div>
+    <div class="note">What is in the store room at cost price</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 2h3l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
+      Suggested orders
+    </div>
+    <div class="value">{{ summary.order_value | eur }}</div>
+    <div class="note">Cost of everything below</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Stock levels</h2>
+  <p class="hint">
+    Most urgent first. A suggested order covers the supplier's delivery time plus one week.
+    <span class="badge dog">Out</span> · <span class="badge plowhorse">Reorder</span> · <span class="badge star">OK</span>
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Ingredient</th>
+        <th>Supplier</th>
+        <th class="num">In stock</th>
+        <th class="num">Used per day</th>
+        <th class="num">Days left</th>
+        <th class="num">Delivery</th>
+        <th>Status</th>
+        <th class="num">Order</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in stock %}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td><a class="link" href="/sales/suppliers/{{ item.supplier_id }}">{{ item.supplier }}</a></td>
+        <td class="num">{{ "%.1f" | format(item.current if item.current > 0 else 0) }} {{ item.unit }}</td>
+        <td class="num">{{ "%.1f" | format(item.daily_use) }}</td>
+        <td class="num">{{ "%.1f" | format(item.days_left) if item.days_left is not none else "–" }}</td>
+        <td class="num">{{ item.lead_time_days }} d</td>
+        <td>
+          {% if item.status == "out" %}<span class="badge dog">Out</span>
+          {% elif item.status == "reorder" %}<span class="badge plowhorse">Reorder</span>
+          {% else %}<span class="badge star">OK</span>{% endif %}
+        </td>
+        <td class="num">{% if item.suggested_order %}<strong>{{ item.suggested_order }} {{ item.unit }}</strong>{% else %}–{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div class="split">
+  <section class="card" id="new-supplier">
+    <h2>Add a supplier</h2>
+    <p class="hint">Every supplier needs a phone number or an email so orders can be placed.</p>
+
+    {% if added %}<p class="notice success">Supplier “{{ added }}” added.</p>{% endif %}
+    {% if errors %}
+    <div class="notice error">
+      {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/sales/inventory/suppliers#new-supplier" class="form">
+      <label>Name<input name="name" value="{{ form.name or '' }}" required minlength="2"></label>
+      <label>Phone<input name="phone" value="{{ form.phone or '' }}" placeholder="+34 600 000 000"></label>
+      <label>Email<input name="email" type="email" value="{{ form.email or '' }}" placeholder="orders@supplier.com"></label>
+      <label>Delivery time (days)<input name="lead_time_days" type="number" min="0" max="60" value="{{ form.lead_time_days or '' }}" required></label>
+      <fieldset class="choices">
+        <legend>What does it supply? <span class="muted">Ticked ingredients move to this supplier</span></legend>
+        {% for ingredient in ingredients %}
+        <label class="choice">
+          <input type="checkbox" name="ingredient_ids" value="{{ ingredient.id }}" {{ 'checked' if ingredient.id in (form.ingredient_ids or []) else '' }}>
+          {{ ingredient.name }} <span class="muted">· {{ ingredient.supplier }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+      <button type="submit">Add supplier</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Suppliers</h2>
+    <p class="hint">Who to call when something runs low. Click a supplier to see prices and spending.</p>
+    <table>
+      <thead>
+        <tr><th>Supplier</th><th>Contact</th><th class="num">Delivery</th><th>Supplies</th></tr>
+      </thead>
+      <tbody>
+        {% for s in suppliers %}
+        <tr>
+          <td><a class="link" href="/sales/suppliers/{{ s.id }}">{{ s.name }}</a></td>
+          <td class="muted">
+            {% if s.phone %}<div class="nowrap">{{ s.phone }}</div>{% endif %}
+            {% if s.email %}<div>{{ s.email }}</div>{% endif %}
+          </td>
+          <td class="num">{{ s.lead_time_days }} d</td>
+          <td class="muted">{{ s.supplies or "Nothing yet" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

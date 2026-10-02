@@ -1,4 +1,4 @@
-"""SQL that creates the tables owned by the sales domain (menu items, ingredients, recipes, suppliers, fixed expenses)."""
+"""SQL that creates the tables owned by the sales domain (menu items, ingredients, recipes, suppliers, purchases, fixed expenses)."""
 
 SALES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS suppliers (
@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS ingredients (
     reorder_level  REAL    NOT NULL
 );
 
-
 CREATE TABLE IF NOT EXISTS menu_items (
     code      TEXT PRIMARY KEY,
     name      TEXT NOT NULL,
@@ -33,6 +32,15 @@ CREATE TABLE IF NOT EXISTS recipes (
     ingredient_id  INTEGER NOT NULL REFERENCES ingredients(id),
     quantity       REAL    NOT NULL,
     PRIMARY KEY (item_code, ingredient_id)
+);
+
+CREATE TABLE IF NOT EXISTS purchases (
+    id             INTEGER PRIMARY KEY,
+    supplier_id    INTEGER NOT NULL REFERENCES suppliers(id),
+    ingredient_id  INTEGER NOT NULL REFERENCES ingredients(id),
+    quantity       REAL    NOT NULL CHECK (quantity > 0),
+    unit_price     REAL    NOT NULL CHECK (unit_price >= 0),
+    received_on    TEXT    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS fixed_expenses (

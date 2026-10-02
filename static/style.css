@@ -147,3 +147,43 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* Two cards side by side */
 .split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 22px; align-items: start; }
 .chart-box.small { height: 220px; margin-bottom: 12px; }
+
+
+/* Forms and messages */
+.form { display: grid; gap: 12px; }
+.form label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.form input {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+.form input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.form button {
+  justify-self: start;
+  padding: 9px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.form button:hover { filter: brightness(1.1); }
+.notice { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; }
+.notice.success { background: var(--star-bg); color: var(--star); }
+.notice.error { background: var(--dog-bg); color: var(--dog); }
+.nowrap { white-space: nowrap; }
+
+
+/* Links and checkbox lists */
+.link { color: var(--accent); font-weight: 600; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.choices { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; max-height: 220px; overflow-y: auto; }
+.choices legend { font-size: 13px; font-weight: 600; color: var(--muted); padding: 0 4px; }
+.form .choice { display: flex; align-items: center; gap: 8px; font-weight: 400; color: var(--ink); padding: 3px 0; }
+
+.form select { padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }

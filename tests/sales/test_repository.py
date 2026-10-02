@@ -2,7 +2,17 @@ import sqlite3
 
 import pytest
 
-from domains.sales.repository import get_dish_sales
+from domains.sales.repository import (
+    add_purchase,
+    add_supplier,
+    get_dish_sales,
+    get_ingredient_choices,
+    get_purchases,
+    get_last_order_day,
+    get_stock_levels,
+    get_supplier,
+    get_suppliers,
+)
 from domains.sales.seed import seed_sales_if_empty
 
 
@@ -61,3 +71,57 @@ def test_demo_data_loads_once(conn):
 def test_supplier_needs_phone_or_email(conn):
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO suppliers (name, lead_time_days) VALUES ('No contact', 2)")
+
+
+def test_stock_levels_count_only_usage_since_the_stocktake(conn):
+    add_menu(conn)                                     # rice counted on 2026-09-01, 0.5 kg per risotto
+    conn.execute("UPDATE ingredients SET counted_at = '2026-09-05' WHERE name = 'Rice'")
+    conn.execute("INSERT INTO orders VALUES (1, 1, 2, '2026-09-04T14:00:00')")   # before the count
+    conn.execute("INSERT INTO order_items (order_id, item_code, quantity, unit_price) VALUES (1, 'RIS01', 4, 16)")
+    conn.execute("INSERT INTO orders VALUES (2, 1, 2, '2026-09-06T14:00:00')")   # after the count
+    conn.execute("INSERT INTO order_items (order_id, item_code, quantity, unit_price) VALUES (2, 'RIS01', 2, 16)")
+
+    rice = {i["name"]: i for i in get_stock_levels(conn)}["Rice"]
+    assert rice["used_since_count"] == pytest.approx(1.0)   # only the 2 risottos after the count
+    assert rice["supplier"] == "Supplier"
+    assert rice["used_in_period"] == pytest.approx(3.0)     # all 6 risottos in the period
+    assert get_last_order_day(conn) == "2026-09-06"
+
+
+def test_add_supplier_and_list_suppliers(conn):
+    add_supplier(conn, "Huerta", None, "ventas@huerta.es", 1)
+    suppliers = get_suppliers(conn)
+    assert [s["name"] for s in suppliers] == ["Huerta"]
+    assert suppliers[0]["supplies"] == ""
+
+
+def test_new_supplier_takes_over_the_ticked_ingredients(conn):
+    add_menu(conn)                                     # Rice (id 1) and Chicken (id 2) belong to "Supplier"
+    new_id = add_supplier(conn, "Arroces Bomba", "600", None, 3, ingredient_ids=[1])
+    suppliers = {s["name"]: s for s in get_suppliers(conn)}
+    assert suppliers["Arroces Bomba"]["supplies"] == "Rice"
+    assert suppliers["Supplier"]["supplies"] == "Chicken"
+    assert get_supplier(conn, new_id)["lead_time_days"] == 3
+    assert [i["supplier"] for i in get_ingredient_choices(conn)] == ["Supplier", "Arroces Bomba"]  # Chicken, Rice
+
+
+def test_unknown_supplier_is_none(conn):
+    assert get_supplier(conn, 999) is None
+
+
+def test_deliveries_after_the_stocktake_count_as_received(conn):
+    add_menu(conn)                                      # rice counted on 2026-09-01
+    add_purchase(conn, 1, 1, 20, 2.0, "2026-08-30")      # before the count: already in the counted stock
+    add_purchase(conn, 1, 1, 15, 2.1, "2026-09-03")      # after the count
+    rice = {i["name"]: i for i in get_stock_levels(conn)}["Rice"]
+    assert rice["received_since_count"] == 15
+
+    history = get_purchases(conn, 1)
+    assert [p["received_on"] for p in history] == ["2026-09-03", "2026-08-30"]   # newest first
+    assert history[0]["total"] == pytest.approx(31.5)
+
+
+def test_purchase_quantity_must_be_positive(conn):
+    add_menu(conn)
+    with pytest.raises(sqlite3.IntegrityError):
+        add_purchase(conn, 1, 1, 0, 2.0, "2026-09-03")
