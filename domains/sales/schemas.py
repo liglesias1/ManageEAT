@@ -1,5 +1,5 @@
 """Pydantic models for the data entering and leaving the sales domain."""
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -11,6 +11,7 @@ class SupplierIn(BaseModel):
     phone: Optional[str] = Field(default=None, max_length=30)
     email: Optional[str] = Field(default=None, max_length=120)
     lead_time_days: int = Field(ge=0, le=60)
+    ingredient_ids: List[int] = [] 
 
     @field_validator("name", "phone", "email", mode="before")
     @classmethod

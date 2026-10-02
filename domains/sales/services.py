@@ -108,6 +108,7 @@ def stock_status(ingredients, as_of):
             "status": status,
             "suggested_order": math.ceil(needed) if status != "ok" and needed > 0 else 0,
             "stock_value": max(current, 0) * item["unit_cost"],
+            "spend_in_period": item.get("used_in_period", 0) * item["unit_cost"],
         })
     order = {"out": 0, "reorder": 1, "ok": 2}
     return sorted(result, key=lambda i: (order[i["status"]], i["days_left"] if i["days_left"] is not None else 1e9))
@@ -118,5 +119,15 @@ def inventory_summary(stock):
         "to_reorder": sum(1 for i in stock if i["status"] == "reorder"),
         "out_of_stock": sum(1 for i in stock if i["status"] == "out"),
         "stock_value": sum(i["stock_value"] for i in stock),
+        "order_value": sum(i["suggested_order"] * i["unit_cost"] for i in stock),
+    }
+
+
+
+def supplier_summary(stock):
+    """Key figures for one supplier's page, from the stock_status of its ingredients."""
+    return {
+        "spend": sum(i["spend_in_period"] for i in stock),
+        "to_reorder": sum(1 for i in stock if i["status"] != "ok"),
         "order_value": sum(i["suggested_order"] * i["unit_cost"] for i in stock),
     }

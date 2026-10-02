@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from domains.sales.schemas import SupplierIn
-from domains.sales.services import inventory_summary, stock_status
+from domains.sales.services import inventory_summary, stock_status, supplier_summary
 
 
 def ingredient(name="Rice", counted=100, used=0, reorder=10, lead=2, cost=2.0, counted_at="2026-09-21"):
@@ -79,6 +79,15 @@ def test_inventory_summary():
     assert summary["stock_value"] == 90 * 2.0 + 5 * 1.0
     assert summary["order_value"] > 0
 
+def test_supplier_summary_adds_up_spend_and_orders():
+    stock = stock_status([
+        {**ingredient("A", counted=100, used=10, cost=2.0), "used_in_period": 40},   # ok
+        {**ingredient("B", counted=100, used=95, cost=1.0), "used_in_period": 120},  # reorder
+    ], "2026-09-30")
+    summary = supplier_summary(stock)
+    assert summary["spend"] == 40 * 2.0 + 120 * 1.0
+    assert summary["to_reorder"] == 1
+    assert summary["order_value"] > 0
 
 # ---------- SupplierIn (form validation) ----------
 
@@ -86,6 +95,7 @@ def test_supplier_with_only_a_phone_is_valid():
     supplier = SupplierIn(name="Carnes Martín", phone="+34 600 000 000", email="", lead_time_days="2")
     assert supplier.email is None
     assert supplier.lead_time_days == 2
+    assert supplier.ingredient_ids == []
 
 
 def test_supplier_without_phone_or_email_is_rejected():

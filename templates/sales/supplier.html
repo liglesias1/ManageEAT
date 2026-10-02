@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ supplier.name }}{% endblock %}
+{% block heading %}{{ supplier.name }}{% endblock %}
+{% block intro %}
+What this supplier sells us, at what price, and how much of it the kitchen used during the period.
+<a class="link" href="/sales/inventory">← Back to inventory</a>
+{% endblock %}
+
+{% block content %}
+<section class="kpis">
+  <div class="kpi highlight">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Spend in the period
+    </div>
+    <div class="value">{{ summary.spend | eur }}</div>
+    <div class="note">Cost of what the recipes used</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      To reorder
+    </div>
+    <div class="value">{{ summary.to_reorder }}</div>
+    <div class="note">Suggested order: {{ summary.order_value | eur }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>
+      Contact
+    </div>
+    <div class="value" style="font-size:16px">{{ supplier.phone or "–" }}</div>
+    <div class="note">{{ supplier.email or "No email" }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.7a1 1 0 0 0-.2-.6l-3.5-4.4A1 1 0 0 0 17.5 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>
+      Delivery time
+    </div>
+    <div class="value">{{ supplier.lead_time_days }} days</div>
+    <div class="note">From order to arrival</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Products and prices</h2>
+  <p class="hint">Agreed price per unit and how much of each product was used during the period.</p>
+  {% if items %}
+  <table>
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th class="num">Price</th>
+        <th class="num">Used in period</th>
+        <th class="num">Spend</th>
+        <th class="num">In stock</th>
+        <th>Status</th>
+        <th class="num">Order</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td class="num">{{ item.unit_cost | eur }} / {{ item.unit }}</td>
+        <td class="num">{{ "%.1f" | format(item.used_in_period) }} {{ item.unit }}</td>
+        <td class="num"><strong>{{ item.spend_in_period | eur }}</strong></td>
+        <td class="num">{{ "%.1f" | format(item.current if item.current > 0 else 0) }} {{ item.unit }}</td>
+        <td>
+          {% if item.status == "out" %}<span class="badge dog">Out</span>
+          {% elif item.status == "reorder" %}<span class="badge plowhorse">Reorder</span>
+          {% else %}<span class="badge star">OK</span>{% endif %}
+        </td>
+        <td class="num">{% if item.suggested_order %}{{ item.suggested_order }} {{ item.unit }}{% else %}–{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">This supplier does not supply any ingredient yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
