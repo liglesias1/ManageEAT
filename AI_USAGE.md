@@ -15,3 +15,6 @@
 | 2026-10-01 | Claude | Write the designed tests and design more for the repository and the pages using an in-memory database | Accepted | | |
 | 2026-10-01 | Claude | Design the personnel tables (roles with hourly rate and capacity, employees) and their demo data | Modified | Kept my decision of one role per employee and pay per role. Added covers_per_hour and min_staff to roles so the schedule can be calculated from demand | |
 | 2026-10-01 | Claude | Help me find why the personnel tests were not running | Accepted | The file was wrongly named, so pytest did not collect it | |
+
+| 2026-10-02 | Claude | Calculate staff demand per hour and compare recommended vs. actual staff from clock-ins | Modified | The AI proposed 3 roles (waiter, kitchen, bar) with 12 diners per waiter. I replaced them with the six roles a real restaurant uses (waiter, runner, bar, pass, cook, dishwasher) and set waiter capacity to 30 diners per hour | |
+| 2026-10-02 | Claude | Build the staff and schedule page with a demand heatmap and staffing gaps per role | Accepted | | |
