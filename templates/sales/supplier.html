@@ -2,7 +2,8 @@
 {% block title %}{{ supplier.name }}{% endblock %}
 {% block heading %}{{ supplier.name }}{% endblock %}
 {% block intro %}
-What this supplier sells us, at what price, and how much of it the kitchen used during the period.
+{{ supplier.phone or "" }}{% if supplier.phone and supplier.email %} · {% endif %}{{ supplier.email or "" }}
+· Delivers in {{ supplier.lead_time_days }} days.
 <a class="link" href="/sales/inventory">← Back to inventory</a>
 {% endblock %}
 
@@ -10,11 +11,19 @@ What this supplier sells us, at what price, and how much of it the kitchen used 
 <section class="kpis">
   <div class="kpi highlight">
     <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 2h3l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
+      Purchased
+    </div>
+    <div class="value">{{ summary.purchased | eur }}</div>
+    <div class="note">{{ summary.deliveries }} deliveries recorded</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-      Spend in the period
+      Used at cost
     </div>
     <div class="value">{{ summary.spend | eur }}</div>
-    <div class="note">Cost of what the recipes used</div>
+    <div class="note">What the recipes used in the period</div>
   </div>
   <div class="kpi">
     <div class="label">
@@ -23,14 +32,6 @@ What this supplier sells us, at what price, and how much of it the kitchen used 
     </div>
     <div class="value">{{ summary.to_reorder }}</div>
     <div class="note">Suggested order: {{ summary.order_value | eur }}</div>
-  </div>
-  <div class="kpi">
-    <div class="label">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>
-      Contact
-    </div>
-    <div class="value" style="font-size:16px">{{ supplier.phone or "–" }}</div>
-    <div class="note">{{ supplier.email or "No email" }}</div>
   </div>
   <div class="kpi">
     <div class="label">
@@ -44,7 +45,7 @@ What this supplier sells us, at what price, and how much of it the kitchen used 
 
 <section class="card">
   <h2>Products and prices</h2>
-  <p class="hint">Agreed price per unit and how much of each product was used during the period.</p>
+  <p class="hint">Current price per unit, how much was used during the period and what is left.</p>
   {% if items %}
   <table>
     <thead>
@@ -52,7 +53,7 @@ What this supplier sells us, at what price, and how much of it the kitchen used 
         <th>Product</th>
         <th class="num">Price</th>
         <th class="num">Used in period</th>
-        <th class="num">Spend</th>
+        <th class="num">Used at cost</th>
         <th class="num">In stock</th>
         <th>Status</th>
         <th class="num">Order</th>
@@ -64,7 +65,7 @@ What this supplier sells us, at what price, and how much of it the kitchen used 
         <td>{{ item.name }}</td>
         <td class="num">{{ item.unit_cost | eur }} / {{ item.unit }}</td>
         <td class="num">{{ "%.1f" | format(item.used_in_period) }} {{ item.unit }}</td>
-        <td class="num"><strong>{{ item.spend_in_period | eur }}</strong></td>
+        <td class="num">{{ item.spend_in_period | eur }}</td>
         <td class="num">{{ "%.1f" | format(item.current if item.current > 0 else 0) }} {{ item.unit }}</td>
         <td>
           {% if item.status == "out" %}<span class="badge dog">Out</span>
@@ -80,4 +81,61 @@ What this supplier sells us, at what price, and how much of it the kitchen used 
   <p class="muted">This supplier does not supply any ingredient yet.</p>
   {% endif %}
 </section>
+
+<div class="split">
+  <section class="card" id="new-delivery">
+    <h2>Record a delivery</h2>
+    <p class="hint">Deliveries received after the last stocktake are added to the stock.</p>
+
+    {% if added %}<p class="notice success">Delivery recorded.</p>{% endif %}
+    {% if errors %}
+    <div class="notice error">
+      {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if items %}
+    <form method="post" action="/sales/suppliers/{{ supplier.id }}/purchases#new-delivery" class="form">
+      <label>Product
+        <select name="ingredient_id" required>
+          {% for item in items %}
+          <option value="{{ item.id }}" {{ 'selected' if form.ingredient_id | string == item.id | string else '' }}>{{ item.name }} ({{ item.unit }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Quantity<input name="quantity" type="number" step="0.1" min="0.1" value="{{ form.quantity or '' }}" required></label>
+      <label>Price per unit (€)<input name="unit_price" type="number" step="0.01" min="0" value="{{ form.unit_price or '' }}" required></label>
+      <label>Received on<input name="received_on" type="date" value="{{ form.received_on or '' }}" required></label>
+      <button type="submit">Record delivery</button>
+    </form>
+    {% else %}
+    <p class="muted">Assign products to this supplier before recording deliveries.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Order history</h2>
+    <p class="hint">Every delivery from this supplier, newest first.</p>
+    {% if purchases %}
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Product</th><th class="num">Quantity</th><th class="num">Price</th><th class="num">Total</th></tr>
+      </thead>
+      <tbody>
+        {% for p in purchases %}
+        <tr>
+          <td class="nowrap">{{ p.received_on }}</td>
+          <td>{{ p.ingredient }}</td>
+          <td class="num">{{ "%g" | format(p.quantity) }} {{ p.unit }}</td>
+          <td class="num">{{ p.unit_price | eur }}</td>
+          <td class="num"><strong>{{ p.total | eur }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No deliveries recorded yet.</p>
+    {% endif %}
+  </section>
+</div>
 {% endblock %}

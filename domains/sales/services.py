@@ -71,7 +71,6 @@ def menu_summary(dishes):
     }
 
 
-
 # ---------- Inventory ----------
 
 # When suggesting an order, buy enough for the supplier's delivery time plus one more week
@@ -81,13 +80,13 @@ ORDER_COVER_DAYS = 7
 def stock_status(ingredients, as_of):
     """Current stock, daily use, days left and whether to reorder, for each ingredient.
 
-    Current stock = last stocktake - what the recipes say was used since then.
+    Current stock = last stocktake + deliveries received since then - what the recipes say was used.
     An ingredient needs reordering if it is below its reorder level, or if it will run out
     before a new delivery could arrive (days left <= the supplier's lead time).
     """
     result = []
     for item in ingredients:
-        current = item["counted_stock"] - item["used_since_count"]
+        current = item["counted_stock"] + item.get("received_since_count", 0) - item["used_since_count"]
         days_counted = (date.fromisoformat(as_of) - date.fromisoformat(item["counted_at"])).days + 1 if as_of else 0
         daily_use = item["used_since_count"] / days_counted if days_counted > 0 else 0.0
         days_left = max(current, 0) / daily_use if daily_use else None
@@ -123,10 +122,11 @@ def inventory_summary(stock):
     }
 
 
-
-def supplier_summary(stock):
-    """Key figures for one supplier's page, from the stock_status of its ingredients."""
+def supplier_summary(stock, purchases=()):
+    """Key figures for one supplier's page, from the stock_status of its ingredients and its deliveries."""
     return {
+        "purchased": sum(p["total"] for p in purchases),
+        "deliveries": len(purchases),
         "spend": sum(i["spend_in_period"] for i in stock),
         "to_reorder": sum(1 for i in stock if i["status"] != "ok"),
         "order_value": sum(i["suggested_order"] * i["unit_cost"] for i in stock),

@@ -185,3 +185,5 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .choices { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; max-height: 220px; overflow-y: auto; }
 .choices legend { font-size: 13px; font-weight: 600; color: var(--muted); padding: 0 4px; }
 .form .choice { display: flex; align-items: center; gap: 8px; font-weight: 400; color: var(--ink); padding: 3px 0; }
+
+.form select { padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }

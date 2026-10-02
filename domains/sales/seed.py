@@ -68,6 +68,9 @@ RECIPES = [
     ("CER01", 18, 1),
 ]
 
+# Weekly deliveries before the last stocktake: (received_on, share of the counted stock delivered)
+PURCHASE_ROUNDS = [("2026-09-01", 0.9), ("2026-09-08", 0.8), ("2026-09-15", 0.85)]
+
 # description, amount (EUR), month
 FIXED_EXPENSES = [
     ("Rent", 3200.00, "2026-09"),
@@ -85,6 +88,14 @@ def seed_sales_if_empty(conn):
     conn.executemany("INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?)", INGREDIENTS)
     conn.executemany("INSERT INTO menu_items VALUES (?, ?, ?)", MENU_ITEMS)
     conn.executemany("INSERT INTO recipes VALUES (?, ?, ?)", RECIPES)
+    conn.executemany(
+        "INSERT INTO purchases (supplier_id, ingredient_id, quantity, unit_price, received_on) VALUES (?, ?, ?, ?, ?)",
+        [
+            (supplier_id, ingredient_id, round(counted * share), unit_cost, day)
+            for day, share in PURCHASE_ROUNDS
+            for ingredient_id, _, _, unit_cost, supplier_id, counted, _, _ in INGREDIENTS
+        ],
+    )
     conn.executemany(
         "INSERT INTO fixed_expenses (description, amount, month) VALUES (?, ?, ?)", FIXED_EXPENSES
     )

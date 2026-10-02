@@ -3,9 +3,11 @@ import sqlite3
 import pytest
 
 from domains.sales.repository import (
+    add_purchase,
     add_supplier,
     get_dish_sales,
     get_ingredient_choices,
+    get_purchases,
     get_last_order_day,
     get_stock_levels,
     get_supplier,
@@ -105,3 +107,21 @@ def test_new_supplier_takes_over_the_ticked_ingredients(conn):
 
 def test_unknown_supplier_is_none(conn):
     assert get_supplier(conn, 999) is None
+
+
+def test_deliveries_after_the_stocktake_count_as_received(conn):
+    add_menu(conn)                                      # rice counted on 2026-09-01
+    add_purchase(conn, 1, 1, 20, 2.0, "2026-08-30")      # before the count: already in the counted stock
+    add_purchase(conn, 1, 1, 15, 2.1, "2026-09-03")      # after the count
+    rice = {i["name"]: i for i in get_stock_levels(conn)}["Rice"]
+    assert rice["received_since_count"] == 15
+
+    history = get_purchases(conn, 1)
+    assert [p["received_on"] for p in history] == ["2026-09-03", "2026-08-30"]   # newest first
+    assert history[0]["total"] == pytest.approx(31.5)
+
+
+def test_purchase_quantity_must_be_positive(conn):
+    add_menu(conn)
+    with pytest.raises(sqlite3.IntegrityError):
+        add_purchase(conn, 1, 1, 0, 2.0, "2026-09-03")

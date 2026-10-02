@@ -1,4 +1,5 @@
 """Pydantic models for the data entering and leaving the sales domain."""
+from datetime import date
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -11,7 +12,7 @@ class SupplierIn(BaseModel):
     phone: Optional[str] = Field(default=None, max_length=30)
     email: Optional[str] = Field(default=None, max_length=120)
     lead_time_days: int = Field(ge=0, le=60)
-    ingredient_ids: List[int] = [] 
+    ingredient_ids: List[int] = []
 
     @field_validator("name", "phone", "email", mode="before")
     @classmethod
@@ -35,3 +36,12 @@ class SupplierIn(BaseModel):
         if not self.phone and not self.email:
             raise ValueError("add a phone number or an email")
         return self
+
+
+class PurchaseIn(BaseModel):
+    """A delivery recorded from a supplier's page."""
+
+    ingredient_id: int
+    quantity: float = Field(gt=0)
+    unit_price: float = Field(ge=0)
+    received_on: date

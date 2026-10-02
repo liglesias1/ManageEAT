@@ -46,7 +46,11 @@ def get_stock_levels(conn):
                   JOIN order_items oi ON oi.item_code = r.item_code
                   JOIN orders o       ON o.id = oi.order_id
                  WHERE r.ingredient_id = i.id
-                   AND date(o.created_at) >= i.counted_at) AS used_since_count
+                   AND date(o.created_at) >= i.counted_at) AS used_since_count,
+               (SELECT COALESCE(SUM(p.quantity), 0)
+                  FROM purchases p
+                 WHERE p.ingredient_id = i.id
+                   AND p.received_on >= i.counted_at)      AS received_since_count
           FROM ingredients i
           JOIN suppliers s ON s.id = i.supplier_id
          ORDER BY i.name
@@ -109,3 +113,27 @@ def add_supplier(conn, name, phone, email, lead_time_days, ingredient_ids=()):
     )
     conn.commit()
     return supplier_id
+
+
+def get_purchases(conn, supplier_id):
+    """Every delivery from a supplier, newest first."""
+    rows = conn.execute(
+        """
+        SELECT p.id, p.received_on, i.name AS ingredient, i.unit, p.quantity, p.unit_price,
+               p.quantity * p.unit_price AS total
+          FROM purchases p
+          JOIN ingredients i ON i.id = p.ingredient_id
+         WHERE p.supplier_id = ?
+         ORDER BY p.received_on DESC, p.id DESC
+        """,
+        (supplier_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def add_purchase(conn, supplier_id, ingredient_id, quantity, unit_price, received_on):
+    conn.execute(
+        "INSERT INTO purchases (supplier_id, ingredient_id, quantity, unit_price, received_on) VALUES (?, ?, ?, ?, ?)",
+        (supplier_id, ingredient_id, quantity, unit_price, received_on),
+    )
+    conn.commit()

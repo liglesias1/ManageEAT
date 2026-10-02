@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from domains.sales.schemas import SupplierIn
+from domains.sales.schemas import PurchaseIn, SupplierIn
 from domains.sales.services import inventory_summary, stock_status, supplier_summary
 
 
@@ -18,6 +18,11 @@ def test_current_stock_is_stocktake_minus_usage():
     assert item["daily_use"] == 3
     assert item["days_left"] == pytest.approx(70 / 3)
     assert item["status"] == "ok"
+
+
+def test_deliveries_since_the_stocktake_are_added():
+    item = stock_status([{**ingredient(counted=100, used=30), "received_since_count": 50}], "2026-09-30")[0]
+    assert item["current"] == 120
 
 
 def test_below_reorder_level_needs_reordering():
@@ -79,17 +84,21 @@ def test_inventory_summary():
     assert summary["stock_value"] == 90 * 2.0 + 5 * 1.0
     assert summary["order_value"] > 0
 
+
 def test_supplier_summary_adds_up_spend_and_orders():
     stock = stock_status([
         {**ingredient("A", counted=100, used=10, cost=2.0), "used_in_period": 40},   # ok
         {**ingredient("B", counted=100, used=95, cost=1.0), "used_in_period": 120},  # reorder
     ], "2026-09-30")
-    summary = supplier_summary(stock)
+    summary = supplier_summary(stock, [{"total": 100.0}, {"total": 50.0}])
+    assert summary["purchased"] == 150
+    assert summary["deliveries"] == 2
     assert summary["spend"] == 40 * 2.0 + 120 * 1.0
     assert summary["to_reorder"] == 1
     assert summary["order_value"] > 0
 
-# ---------- SupplierIn (form validation) ----------
+
+# ---------- SupplierIn and PurchaseIn (form validation) ----------
 
 def test_supplier_with_only_a_phone_is_valid():
     supplier = SupplierIn(name="Carnes Martín", phone="+34 600 000 000", email="", lead_time_days="2")
@@ -111,3 +120,11 @@ def test_supplier_email_must_look_like_an_email():
 def test_supplier_lead_time_cannot_be_negative():
     with pytest.raises(ValidationError):
         SupplierIn(name="Slow", phone="600", email=None, lead_time_days=-1)
+
+
+def test_purchase_needs_positive_quantity_and_a_real_date():
+    assert PurchaseIn(ingredient_id="2", quantity="40", unit_price="6.5", received_on="2026-09-27").quantity == 40
+    with pytest.raises(ValidationError):
+        PurchaseIn(ingredient_id=2, quantity=0, unit_price=6.5, received_on="2026-09-27")
+    with pytest.raises(ValidationError):
+        PurchaseIn(ingredient_id=2, quantity=5, unit_price=6.5, received_on="27/09/2026")
