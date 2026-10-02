@@ -8,8 +8,8 @@ from domains.personnel.seed import seed_personnel_if_empty
 def test_demo_staff_loads_once(conn):
     seed_personnel_if_empty(conn)
     seed_personnel_if_empty(conn)
-    assert conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 3
-    assert conn.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 10
+    assert conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 6
+    assert conn.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 16
 
 
 def test_every_clocked_employee_exists(conn):
@@ -31,3 +31,16 @@ def test_hourly_rate_must_be_positive(conn):
 def test_employee_needs_an_existing_role(conn):
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO employees (name, role_id) VALUES ('Nobody', 99)")
+
+
+def test_repository_reads_demand_and_shifts(conn):
+    from domains.personnel import repository
+    from ingestion.seed import generate_demo_data
+
+    generate_demo_data(conn)
+    seed_personnel_if_empty(conn)
+    assert len(repository.get_open_days(conn)) == 28
+    assert len(repository.get_roles(conn)) == 6
+    assert len(repository.get_shifts(conn)) == 320
+    total_covers = sum(row["covers"] for row in repository.get_covers_by_hour(conn))
+    assert total_covers == conn.execute("SELECT SUM(covers) FROM orders").fetchone()[0]

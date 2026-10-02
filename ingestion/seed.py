@@ -34,10 +34,13 @@ POPULARITY = {
 HOURLY_WEIGHT = {13: 3, 14: 6, 15: 3, 20: 2, 21: 6, 22: 5, 23: 1}
 
 # Demo staff: employee_id -> which service they usually work
+# Demo staff: employee_id -> which service they usually work
 EMPLOYEE_SHIFTS = {
-    1: "lunch", 2: "lunch", 3: "dinner", 4: "dinner", 5: "lunch",
-    6: "dinner", 7: "lunch", 8: "dinner", 9: "lunch", 10: "dinner",
+    1: "lunch", 2: "lunch", 3: "dinner", 4: "dinner", 5: "lunch", 6: "dinner",
+    7: "lunch", 8: "dinner", 9: "lunch", 10: "lunch", 11: "dinner", 12: "lunch",
+    13: "dinner", 14: "dinner", 15: "lunch", 16: "dinner",
 }
+
 SHIFT_HOURS = {"lunch": (12, 16), "dinner": (19, 24)}
 
 def _dishes(category):
