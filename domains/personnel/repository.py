@@ -38,3 +38,31 @@ def get_shifts(conn):
         """
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+
+def get_worked_shifts(conn, start, end):
+    """Every clock-in between two dates (inclusive), with the employee, their role and its hourly rate."""
+    rows = conn.execute(
+        """
+        SELECT e.id   AS employee_id,
+               e.name AS employee,
+               r.name AS role,
+               r.hourly_rate,
+               c.clock_in,
+               c.clock_out
+          FROM clock_ins c
+          JOIN employees e ON e.id = c.employee_id
+          JOIN roles r     ON r.id = e.role_id
+         WHERE date(c.clock_in) BETWEEN ? AND ?
+         ORDER BY r.id, e.name
+        """,
+        (start, end),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_clock_in_period(conn):
+    """First and last day with clock-ins, as ('YYYY-MM-DD', 'YYYY-MM-DD')."""
+    row = conn.execute("SELECT MIN(date(clock_in)) AS first, MAX(date(clock_in)) AS last FROM clock_ins").fetchone()
+    return row["first"], row["last"]

@@ -3,6 +3,8 @@ import math
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 
+from domains.personnel import repository
+
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
@@ -99,3 +101,53 @@ def schedule_summary(schedule):
         "extra": sum(1 for cell in cells if cell["status"] == "extra"),
         "most_missing_role": max(missing, key=missing.get) if missing else None,
     }
+
+
+
+# ---------- Payroll ----------
+
+def hours_worked(clock_in, clock_out):
+    """Hours between clock-in and clock-out, e.g. 19:05 -> 00:10 is 5.08 hours."""
+    seconds = (datetime.fromisoformat(clock_out) - datetime.fromisoformat(clock_in)).total_seconds()
+    return max(seconds, 0) / 3600
+
+
+def calculate_payroll(shifts):
+    """Hours and pay per employee: clocked hours x the hourly rate of their role, at a single rate.
+
+    `shifts` is a list of dicts with: employee_id, employee, role, hourly_rate, clock_in, clock_out.
+    """
+    employees = {}
+    for shift in shifts:
+        person = employees.setdefault(shift["employee_id"], {
+            "employee": shift["employee"],
+            "role": shift["role"],
+            "hourly_rate": shift["hourly_rate"],
+            "shifts": 0,
+            "hours": 0.0,
+        })
+        person["shifts"] += 1
+        person["hours"] += hours_worked(shift["clock_in"], shift["clock_out"])
+    for person in employees.values():
+        person["pay"] = round(person["hours"] * person["hourly_rate"], 2)
+    return list(employees.values())
+
+
+def payroll_by_role(payroll):
+    """Total hours and pay for each role, in the order the roles appear."""
+    roles = {}
+    for person in payroll:
+        role = roles.setdefault(person["role"], {"role": person["role"], "people": 0, "hours": 0.0, "pay": 0.0})
+        role["people"] += 1
+        role["hours"] += person["hours"]
+        role["pay"] += person["pay"]
+    return list(roles.values())
+
+
+def labor_cost(conn, start, end):
+    """Total wage cost between two dates (inclusive).
+
+    This is the ONLY function the sales domain may use from personnel: the seam between the two
+    domains. In Assignment 2 it becomes an HTTP endpoint of the personnel service.
+    """
+    return round(sum(person["pay"] for person in calculate_payroll(repository.get_worked_shifts(conn, start, end))), 2)
