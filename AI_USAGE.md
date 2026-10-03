@@ -29,3 +29,6 @@
 
 | 2026-10-03 | Claude | Calculate the monthly profit and loss using the wages from personnel's labor_cost() | Modified | I defined ingredient cost as what each recipe uses times the units sold, not what was bought from suppliers. I chose to analyse a whole month with a weekly breakdown, with fixed expenses entered per month. Wages are passed to the calculation as a function, so sales never reads personnel's tables. I kept the demo data even though the margin is high (62%), because it comes from low fixed costs and a small part-time team, and real restaurant data would give realistic numbers | |
 | 2026-10-03 | Claude | Build the profit and loss page with a form to add fixed expenses, and a test that checks the domain boundary | Accepted | | |
+
+| 2026-10-03 | Claude | Build an overview home page that brings together the key figures of every page | Modified | I asked for a page that combines the figures of all the other pages, with links to each one. It was placed outside the domains (overview.py) so it only calls their public functions and the domain boundary stays intact. Its alerts point to the page where each problem can be fixed | |
+| 2026-10-03 | Claude | Write ADR-4 on the testing strategy | Modified | I described the four kinds of tests we already had (services, repository, pages, architecture) and why mocks of the database were not used | |
