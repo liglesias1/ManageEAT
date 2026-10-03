@@ -86,3 +86,33 @@ def test_delivery_of_a_product_the_supplier_does_not_sell_is_rejected(client):
     )
     assert response.status_code == 422
     assert "does not sell that product" in response.text
+
+
+
+def test_profit_loss_page_shows_statement_with_wages_from_payroll(client):
+    response = client.get("/sales/profit-loss")
+    assert response.status_code == 200
+    assert "Net profit" in response.text
+    assert "from payroll" in response.text
+    assert "Electricity and water" in response.text
+
+
+def test_adding_a_fixed_expense_includes_it_in_the_month(client):
+    response = client.post(
+        "/sales/profit-loss/expenses",
+        data={"description": "Marketing", "amount": "750", "month": "2026-09"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    page = client.get(response.headers["location"]).text
+    assert "Expense “Marketing” added." in page
+    assert "Marketing</td>" in page
+
+
+def test_fixed_expense_with_wrong_amount_is_rejected(client):
+    response = client.post(
+        "/sales/profit-loss/expenses",
+        data={"description": "Marketing", "amount": "-10", "month": "2026-09"},
+    )
+    assert response.status_code == 422
+    assert "Amount" in response.text

@@ -6,10 +6,18 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import ValidationError
 
 from database import get_connection
+from domains.personnel.services import labor_cost  # the only thing sales uses from personnel (see ADR-2)
 from domains.sales import repository
 from domains.sales.repository import get_dish_sales
-from domains.sales.schemas import PurchaseIn, SupplierIn
-from domains.sales.services import classify_menu, inventory_summary, menu_summary, stock_status, supplier_summary
+from domains.sales.schemas import FixedExpenseIn, PurchaseIn, SupplierIn
+from domains.sales.services import (
+    classify_menu,
+    inventory_summary,
+    menu_summary,
+    profit_and_loss,
+    stock_status,
+    supplier_summary,
+)
 from web import templates
 
 router = APIRouter(prefix="/sales", tags=["sales"])
@@ -159,3 +167,59 @@ def record_purchase(
         return _supplier_page(request, supplier_id, errors=["This supplier does not sell that product"],
                               form=form, status_code=422)
     return RedirectResponse(url=f"/sales/suppliers/{supplier_id}?added=true", status_code=303)
+
+
+def _profit_loss_page(request, errors=None, form=None, added=None, status_code=200):
+    conn = get_connection()
+    try:
+        start, end = repository.get_sales_period(conn)
+        month = start[:7] if start else None
+        daily = repository.get_daily_sales(conn, start, end) if start else []
+        expenses = repository.get_fixed_expenses(conn, month) if month else []
+        # Wages come from the personnel domain through one function: this is the seam between the two
+        statement = profit_and_loss(daily, expenses, lambda a, b: labor_cost(conn, a, b), start, end)
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        request,
+        "sales/profit_loss.html",
+        {
+            "start": start,
+            "end": end,
+            "month": month,
+            "pl": statement,
+            "expenses": expenses,
+            "errors": errors or [],
+            "form": form or {"month": month},
+            "added": added,
+        },
+        status_code=status_code,
+    )
+
+
+@router.get("/profit-loss", response_class=HTMLResponse)
+def profit_loss_page(request: Request, added: str = None):
+    return _profit_loss_page(request, added=added)
+
+
+@router.post("/profit-loss/expenses", response_class=HTMLResponse)
+def create_fixed_expense(
+    request: Request,
+    description: str = Form(""),
+    amount: str = Form(""),
+    month: str = Form(""),
+):
+    form = {"description": description, "amount": amount, "month": month}
+    try:
+        expense = FixedExpenseIn(**form)
+    except ValidationError as error:
+        messages = [f"{e['loc'][0].capitalize()}: {e['msg'].lower()}" for e in error.errors()]
+        return _profit_loss_page(request, errors=messages, form=form, status_code=422)
+
+    conn = get_connection()
+    try:
+        repository.add_fixed_expense(conn, expense.description, expense.amount, expense.month)
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/sales/profit-loss?added={expense.description}", status_code=303)

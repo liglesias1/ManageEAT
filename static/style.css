@@ -187,3 +187,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .form .choice { display: flex; align-items: center; gap: 8px; font-weight: 400; color: var(--ink); padding: 3px 0; }
 
 .form select { padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }
+
+
+/* Profit and loss statement */
+.statement td.indent { padding-left: 26px; color: var(--muted); }
+.statement tr.subtotal td { font-weight: 600; border-top: 1px solid var(--ink); }
+.statement tr.total td, table tr.total td { font-weight: 700; border-top: 2px solid var(--ink); }
