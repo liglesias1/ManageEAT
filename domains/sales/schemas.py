@@ -45,3 +45,17 @@ class PurchaseIn(BaseModel):
     quantity: float = Field(gt=0)
     unit_price: float = Field(ge=0)
     received_on: date
+
+
+
+class FixedExpenseIn(BaseModel):
+    """A monthly fixed expense (rent, electricity...) added from the profit and loss page."""
+
+    description: str = Field(min_length=2, max_length=80)
+    amount: float = Field(gt=0)
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def strip_description(cls, value):
+        return value.strip() if isinstance(value, str) else value

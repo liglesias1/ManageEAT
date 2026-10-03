@@ -3,16 +3,21 @@ import sqlite3
 import pytest
 
 from domains.sales.repository import (
+    add_fixed_expense,
     add_purchase,
     add_supplier,
+    get_daily_sales,
     get_dish_sales,
+    get_fixed_expenses,
     get_ingredient_choices,
     get_purchases,
     get_last_order_day,
+    get_sales_period,
     get_stock_levels,
     get_supplier,
     get_suppliers,
 )
+
 from domains.sales.seed import seed_sales_if_empty
 
 
@@ -125,3 +130,23 @@ def test_purchase_quantity_must_be_positive(conn):
     add_menu(conn)
     with pytest.raises(sqlite3.IntegrityError):
         add_purchase(conn, 1, 1, 0, 2.0, "2026-09-03")
+
+
+
+def test_daily_sales_add_revenue_and_ingredient_cost(conn):
+    add_menu(conn)                                       # paella costs 1.20, risotto 1.00
+    add_order(conn, 1, "PAE01", 2, 18.0)                 # all on 2026-09-01
+    add_order(conn, 2, "RIS01", 1, 16.0)
+    add_order(conn, 3, "XXX99", 1, 3.0)                  # an item with no recipe costs nothing
+    day = get_daily_sales(conn, "2026-09-01", "2026-09-30")[0]
+    assert day["revenue"] == 2 * 18 + 16 + 3
+    assert day["ingredient_cost"] == pytest.approx(2 * 1.20 + 1.00)
+    assert get_sales_period(conn) == ("2026-09-01", "2026-09-01")
+
+
+def test_fixed_expenses_by_month(conn):
+    add_fixed_expense(conn, "Rent", 3200, "2026-09")
+    add_fixed_expense(conn, "Rent", 3200, "2026-10")
+    add_fixed_expense(conn, "Insurance", 180, "2026-09")
+    september = get_fixed_expenses(conn, "2026-09")
+    assert [e["description"] for e in september] == ["Rent", "Insurance"]   # biggest first
