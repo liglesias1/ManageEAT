@@ -25,3 +25,7 @@
 | 2026-10-02 | Claude | Build the inventory page with a form to add suppliers, validated with Pydantic | Modified | I asked to show which ingredients each supplier sells instead of a count, to choose them when adding a supplier, and to add a page per supplier with prices and spend. A purchase order history was left for a later version | |
 
 | 2026-10-02 | Claude | Add a purchase history per supplier and a form to record deliveries | Modified | I asked for a supplier profile page with order history, prices and contact details. Deliveries received after the last stocktake are now added to the stock. Supplier contracts were left out of scope | |
+
+
+| 2026-10-03 | Claude | Calculate the monthly profit and loss using the wages from personnel's labor_cost() | Modified | I defined ingredient cost as what each recipe uses times the units sold, not what was bought from suppliers. I chose to analyse a whole month with a weekly breakdown, with fixed expenses entered per month. Wages are passed to the calculation as a function, so sales never reads personnel's tables. I kept the demo data even though the margin is high (62%), because it comes from low fixed costs and a small part-time team, and real restaurant data would give realistic numbers | |
+| 2026-10-03 | Claude | Build the profit and loss page with a form to add fixed expenses, and a test that checks the domain boundary | Accepted | | |
