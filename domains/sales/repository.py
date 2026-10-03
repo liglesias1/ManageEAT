@@ -137,3 +137,47 @@ def add_purchase(conn, supplier_id, ingredient_id, quantity, unit_price, receive
         (supplier_id, ingredient_id, quantity, unit_price, received_on),
     )
     conn.commit()
+
+
+
+# ---------- Profit and loss ----------
+
+def get_sales_period(conn):
+    """First and last day with orders, as ('YYYY-MM-DD', 'YYYY-MM-DD'), or (None, None)."""
+    row = conn.execute("SELECT MIN(date(created_at)), MAX(date(created_at)) FROM orders").fetchone()
+    return row[0], row[1]
+
+
+def get_daily_sales(conn, start, end):
+    """Revenue and cost of the ingredients used, per day: units sold x what their recipes cost."""
+    rows = conn.execute(
+        """
+        SELECT date(o.created_at)                  AS day,
+               SUM(oi.quantity * oi.unit_price)    AS revenue,
+               SUM(oi.quantity * COALESCE((SELECT SUM(r.quantity * i.unit_cost)
+                                             FROM recipes r
+                                             JOIN ingredients i ON i.id = r.ingredient_id
+                                            WHERE r.item_code = oi.item_code), 0)) AS ingredient_cost
+          FROM orders o
+          JOIN order_items oi ON oi.order_id = o.id
+         WHERE date(o.created_at) BETWEEN ? AND ?
+         GROUP BY day
+         ORDER BY day
+        """,
+        (start, end),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_fixed_expenses(conn, month):
+    rows = conn.execute(
+        "SELECT id, description, amount, month FROM fixed_expenses WHERE month = ? ORDER BY amount DESC", (month,)
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def add_fixed_expense(conn, description, amount, month):
+    conn.execute(
+        "INSERT INTO fixed_expenses (description, amount, month) VALUES (?, ?, ?)", (description, amount, month)
+    )
+    conn.commit()

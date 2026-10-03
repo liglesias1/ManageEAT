@@ -1,7 +1,8 @@
 '''Buisness logic of the sales domain, makes calculations, no queries to the database.'''
 
+import calendar
 import math
-from datetime import date
+from datetime import date, timedelta
 
 # Kasavana & Smith menu engineering: a dish is "popular" if it sells at least
 # 70% of what it would sell if every dish in its category sold the same amount.
@@ -130,4 +131,65 @@ def supplier_summary(stock, purchases=()):
         "spend": sum(i["spend_in_period"] for i in stock),
         "to_reorder": sum(1 for i in stock if i["status"] != "ok"),
         "order_value": sum(i["suggested_order"] * i["unit_cost"] for i in stock),
+    }
+
+
+
+# ---------- Profit and loss ----------
+
+def _week_ranges(start, end):
+    """Splits a period into blocks of 7 days: [('2026-09-01', '2026-09-07'), ...]."""
+    first, last = date.fromisoformat(start), date.fromisoformat(end)
+    weeks = []
+    while first <= last:
+        week_end = min(first + timedelta(days=6), last)
+        weeks.append((first.isoformat(), week_end.isoformat()))
+        first = week_end + timedelta(days=1)
+    return weeks
+
+
+def profit_and_loss(daily_sales, fixed_expenses, labor_cost_for, start, end):
+    """Monthly profit and loss statement with a week-by-week breakdown.
+
+    `labor_cost_for(start, end)` returns the wage cost of a period. It is passed in rather than
+    imported so that this function never depends on how the personnel domain calculates payroll.
+    Fixed expenses are monthly, so each week gets its share by number of days.
+    """
+    fixed_total = sum(e["amount"] for e in fixed_expenses)
+    days_in_month = calendar.monthrange(int(start[:4]), int(start[5:7]))[1] if start else 1
+
+    weeks = []
+    for week_start, week_end in (_week_ranges(start, end) if start else []):
+        days = [d for d in daily_sales if week_start <= d["day"] <= week_end]
+        length = (date.fromisoformat(week_end) - date.fromisoformat(week_start)).days + 1
+        revenue = sum(d["revenue"] for d in days)
+        ingredients = sum(d["ingredient_cost"] for d in days)
+        labor = labor_cost_for(week_start, week_end)
+        fixed = fixed_total / days_in_month * length
+        weeks.append({
+            "start": week_start, "end": week_end, "revenue": revenue, "ingredients": ingredients,
+            "labor": labor, "fixed": fixed, "profit": revenue - ingredients - labor - fixed,
+        })
+
+    revenue = sum(d["revenue"] for d in daily_sales)
+    ingredients = sum(d["ingredient_cost"] for d in daily_sales)
+    labor = labor_cost_for(start, end) if start else 0.0
+    gross_profit = revenue - ingredients
+    net_profit = gross_profit - labor - fixed_total
+
+    def share(amount):
+        return amount / revenue * 100 if revenue else 0.0
+
+    return {
+        "revenue": revenue,
+        "ingredients": ingredients,
+        "gross_profit": gross_profit,
+        "labor": labor,
+        "fixed": fixed_total,
+        "net_profit": net_profit,
+        "ingredients_pct": share(ingredients),
+        "labor_pct": share(labor),
+        "fixed_pct": share(fixed_total),
+        "net_margin_pct": share(net_profit),
+        "weeks": weeks,
     }
