@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block heading %}Overview{% endblock %}
+{% block intro %}
+How the restaurant is doing in {{ month or "the period" }} and what needs your attention.
+Sales data from {{ start or "–" }} to {{ end or "–" }}.
+{% endblock %}
+
+{% block content %}
+<section class="kpis">
+  <div class="kpi highlight">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></svg>
+      Net profit
+    </div>
+    <div class="value">{{ pl.net_profit | eur }}</div>
+    <div class="note">{{ "%.1f" | format(pl.net_margin_pct) }}% of revenue</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Revenue
+    </div>
+    <div class="value">{{ pl.revenue | eur }}</div>
+    <div class="note">Everything charged to customers</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
+      Food cost
+    </div>
+    <div class="value">{{ "%.1f" | format(pl.ingredients_pct) }}%</div>
+    <div class="note">Ingredients as a share of revenue</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>
+      Labour cost
+    </div>
+    <div class="value">{{ "%.1f" | format(pl.labor_pct) }}%</div>
+    <div class="note">Wages as a share of revenue</div>
+  </div>
+</section>
+
+<section class="card attention">
+  <h2>Needs your attention</h2>
+  {% if attention %}
+  <ul>
+    {% for item in attention %}
+    <li>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      <span>{{ item.text }}</span>
+      <a class="link" href="{{ item.link }}">{{ item.page }} →</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing urgent. Everything is within its limits.</p>
+  {% endif %}
+</section>
+
+<div class="overview-grid">
+  <a class="card section" href="/sales/menu">
+    <p class="nav-group">Sales</p>
+    <h2>Menu performance</h2>
+    <dl>
+      <dt>Best-selling dish</dt><dd>{{ menu.best_seller or "–" }}</dd>
+      <dt>Stars</dt><dd>{{ menu.class_counts.star }}</dd>
+      <dt>Dogs</dt><dd>{{ menu.class_counts.dog }}</dd>
+    </dl>
+    <span class="link">Open →</span>
+  </a>
+  <a class="card section" href="/sales/inventory">
+    <p class="nav-group">Sales</p>
+    <h2>Inventory</h2>
+    <dl>
+      <dt>To reorder</dt><dd>{{ inventory.to_reorder + inventory.out_of_stock }}</dd>
+      <dt>Stock value</dt><dd>{{ inventory.stock_value | eur }}</dd>
+      <dt>Suggested order</dt><dd>{{ inventory.order_value | eur }}</dd>
+    </dl>
+    <span class="link">Open →</span>
+  </a>
+  <a class="card section" href="/sales/profit-loss">
+    <p class="nav-group">Sales</p>
+    <h2>Profit &amp; loss</h2>
+    <dl>
+      <dt>Gross profit</dt><dd>{{ pl.gross_profit | eur }}</dd>
+      <dt>Fixed expenses</dt><dd>{{ pl.fixed | eur }}</dd>
+      <dt>Net margin</dt><dd>{{ "%.1f" | format(pl.net_margin_pct) }}%</dd>
+    </dl>
+    <span class="link">Open →</span>
+  </a>
+  <a class="card section" href="/personnel/schedule">
+    <p class="nav-group">Personnel</p>
+    <h2>Staff &amp; schedule</h2>
+    <dl>
+      <dt>Busiest hour</dt>
+      <dd>{% if schedule.peak %}{{ schedule.peak.day_name }} {{ schedule.peak.hour }}:00{% else %}–{% endif %}</dd>
+      <dt>Understaffed slots</dt><dd>{{ schedule.short }}</dd>
+      <dt>Most needed role</dt><dd>{{ schedule.most_missing_role or "None" }}</dd>
+    </dl>
+    <span class="link">Open →</span>
+  </a>
+  <a class="card section" href="/personnel/payroll">
+    <p class="nav-group">Personnel</p>
+    <h2>Payroll</h2>
+    <dl>
+      <dt>Wages</dt><dd>{{ wages | eur }}</dd>
+      <dt>Employees</dt><dd>{{ employees }}</dd>
+      <dt>Hours worked</dt><dd>{{ "%.0f" | format(hours) }}</dd>
+    </dl>
+    <span class="link">Open →</span>
+  </a>
+</div>
+{% endblock %}
