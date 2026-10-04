@@ -9,11 +9,15 @@ from database import get_connection
 from domains.personnel.services import labor_cost  # the only thing sales uses from personnel (see ADR-2)
 from domains.sales import repository
 from domains.sales.repository import get_dish_sales
-from domains.sales.schemas import FixedExpenseIn, PurchaseIn, SupplierIn
+from domains.sales.schemas import DishIn, FixedExpenseIn, PurchaseIn, SupplierIn
 from domains.sales.services import (
+    FOOD_COST_TARGET,
     classify_menu,
+    cost_dishes,
+    dishes_summary,
     inventory_summary,
     menu_summary,
+    new_dish_code,
     profit_and_loss,
     stock_status,
     supplier_summary,
@@ -35,13 +39,91 @@ def menu_page(request: Request):
 
     by_category = {c: [] for c in CATEGORY_ORDER}
     for dish in sorted(dishes, key=lambda d: d["units_sold"], reverse=True):
-        by_category[dish["category"]].append(dish)
+        if dish["class"] != "new":
+            by_category[dish["category"]].append(dish)
 
     return templates.TemplateResponse(
         request,
         "sales/menu.html",
-        {"by_category": by_category, "summary": menu_summary(dishes)},
+        {
+            "by_category": by_category,
+            "new_dishes": [d for d in dishes if d["class"] == "new"],
+            "summary": menu_summary(dishes),
+        },
     )
+
+
+def _dishes_page(request, errors=None, form=None, added=None, status_code=200):
+    conn = get_connection()
+    try:
+        costed = cost_dishes(repository.get_menu(conn), repository.get_recipe_lines(conn))
+        ingredients = repository.get_ingredient_choices(conn)
+    finally:
+        conn.close()
+
+    by_category = {c: [d for d in costed if d["category"] == c] for c in CATEGORY_ORDER}
+    return templates.TemplateResponse(
+        request,
+        "sales/dishes.html",
+        {
+            "by_category": by_category,
+            "summary": dishes_summary(costed),
+            "target": FOOD_COST_TARGET,
+            "ingredients": ingredients,
+            "categories": CATEGORY_ORDER,
+            "errors": errors or [],
+            "form": form or {},
+            "added": added,
+        },
+        status_code=status_code,
+    )
+
+
+@router.get("/dishes", response_class=HTMLResponse)
+def dishes_page(request: Request, added: str = None):
+    return _dishes_page(request, added=added)
+
+
+@router.post("/dishes", response_class=HTMLResponse)
+def create_dish(
+    request: Request,
+    name: str = Form(""),
+    category: str = Form(""),
+    price: str = Form(""),
+    ingredient_id: List[str] = Form([]),
+    quantity: List[str] = Form([]),
+):
+    # The form has several recipe rows; rows left without an ingredient are ignored
+    rows = [(i, q) for i, q in zip(ingredient_id, quantity) if i]
+    form = {"name": name, "category": category, "price": price, "rows": rows}
+    try:
+        dish = DishIn(
+            name=name,
+            category=category,
+            price=price,
+            recipe=[{"ingredient_id": i, "quantity": q} for i, q in rows],
+        )
+    except ValidationError as error:
+        messages = []
+        for e in error.errors():
+            field = "Ingredient quantity" if e["loc"][0] == "recipe" and len(e["loc"]) > 1 else e["loc"][0].capitalize()
+            if e["loc"][0] == "recipe" and e["type"] == "too_short":
+                messages.append("Recipe: add at least one ingredient")
+            else:
+                messages.append(f"{field}: {e['msg'].replace('Value error, ', '').lower()}")
+        return _dishes_page(request, errors=messages, form=form, status_code=422)
+
+    conn = get_connection()
+    try:
+        known = {i["id"] for i in repository.get_ingredient_choices(conn)}
+        if any(line.ingredient_id not in known for line in dish.recipe):
+            return _dishes_page(request, errors=["Recipe: unknown ingredient"], form=form, status_code=422)
+        code = new_dish_code(dish.name, {d["code"] for d in repository.get_menu(conn)})
+        repository.add_dish(conn, code, dish.name, dish.category, dish.price,
+                            [(line.ingredient_id, line.quantity) for line in dish.recipe])
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/sales/dishes?added={dish.name}", status_code=303)
 
 
 def _inventory_page(request, errors=None, form=None, added=None, status_code=200):

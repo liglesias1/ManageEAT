@@ -110,3 +110,46 @@ def test_fixed_expense_with_wrong_amount_is_rejected(client):
     )
     assert response.status_code == 422
     assert "Amount" in response.text
+
+
+
+def test_dishes_page_shows_price_cost_and_recipe(client):
+    response = client.get("/sales/dishes")
+    assert response.status_code == 200
+    assert "Valencian paella" in response.text
+    assert "€18.00" in response.text
+    assert "Markup" in response.text
+
+
+def test_adding_a_dish_puts_it_on_the_menu_as_new(client):
+    response = client.post(
+        "/sales/dishes",
+        data={"name": "Tiramisu", "category": "dessert", "price": "6.50",
+              "ingredient_id": ["13", "11", ""], "quantity": ["0.1", "0.05", ""]},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    page = client.get(response.headers["location"]).text
+    assert "Dish “Tiramisu” added to the menu." in page
+    assert "TIR01" in page
+    menu = client.get("/sales/menu").text
+    assert "New on the menu" in menu
+    assert "Tiramisu" in menu
+
+
+def test_dish_without_recipe_is_rejected(client):
+    response = client.post("/sales/dishes", data={"name": "Air", "category": "main", "price": "5",
+                                                  "ingredient_id": [""], "quantity": [""]})
+    assert response.status_code == 422
+    assert "add at least one ingredient" in response.text
+
+
+def test_dish_with_wrong_quantity_or_unknown_ingredient_is_rejected(client):
+    bad_quantity = client.post("/sales/dishes", data={"name": "Soup", "category": "starter", "price": "5",
+                                                      "ingredient_id": ["6"], "quantity": ["-1"]})
+    assert bad_quantity.status_code == 422
+    assert "Ingredient quantity" in bad_quantity.text
+    unknown = client.post("/sales/dishes", data={"name": "Soup", "category": "starter", "price": "5",
+                                                 "ingredient_id": ["999"], "quantity": ["1"]})
+    assert unknown.status_code == 422
+    assert "unknown ingredient" in unknown.text

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Menu & recipes{% endblock %}
+{% block heading %}Menu & recipes{% endblock %}
+{% block intro %}
+Every dish on the menu with its price, what its ingredients cost and how much is left for the restaurant.
+Costs are calculated from each recipe and the current price of its ingredients.
+{% endblock %}
+
+{% block content %}
+<section class="kpis">
+  <div class="kpi highlight">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
+      Dishes on the menu
+    </div>
+    <div class="value">{{ summary.dishes }}</div>
+    <div class="note">Food and drinks</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+      Average food cost
+    </div>
+    <div class="value">{{ "%.1f" | format(summary.avg_food_cost_pct) }}%</div>
+    <div class="note">Share of the price spent on ingredients</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      Above {{ target }}% food cost
+    </div>
+    <div class="value">{{ summary.above_target }}</div>
+    <div class="note">Dishes whose price may be too low</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></svg>
+      Highest food cost
+    </div>
+    <div class="value" style="font-size:19px">{{ summary.highest.name if summary.highest else "–" }}</div>
+    <div class="note">{% if summary.highest %}{{ "%.1f" | format(summary.highest.food_cost_pct) }}% of its price{% endif %}</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>The menu</h2>
+  <p class="hint">
+    <strong>Markup</strong>: how much the price is above the ingredient cost.
+    <strong>Food cost</strong>: share of the price spent on ingredients (restaurants aim for {{ target }}% or less).
+    Click a dish to see its recipe.
+  </p>
+
+  <div class="tabs">
+    {% for category, dishes in by_category.items() if dishes %}
+    <button class="tab {{ 'active' if loop.first else '' }}" data-category="{{ category }}">{{ category | capitalize }}s</button>
+    {% endfor %}
+  </div>
+
+  {% for category, dishes in by_category.items() if dishes %}
+  <div class="dish-panel {{ 'active' if loop.first else '' }}" id="panel-{{ category }}">
+    <table class="dishes">
+      <thead>
+        <tr>
+          <th>Dish</th>
+          <th class="num">Price</th>
+          <th class="num">Ingredients</th>
+          <th class="num">Margin</th>
+          <th class="num">Markup</th>
+          <th>Food cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dish in dishes %}
+        <tr>
+          <td>
+            <details>
+              <summary>{{ dish.name }} <span class="muted">{{ dish.code }}</span></summary>
+              <table class="recipe">
+                {% for line in dish.recipe %}
+                <tr>
+                  <td>{{ line.ingredient }}</td>
+                  <td class="num">{{ "%g" | format(line.quantity) }} {{ line.unit }}</td>
+                  <td class="num muted">× {{ line.unit_cost | eur }}</td>
+                  <td class="num">{{ line.line_cost | eur }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </details>
+          </td>
+          <td class="num">{{ dish.price | eur }}</td>
+          <td class="num">{{ dish.cost | eur }}</td>
+          <td class="num">{{ dish.margin | eur }}</td>
+          <td class="num">{% if dish.markup_pct is not none %}+{{ "%.0f" | format(dish.markup_pct) }}%{% else %}–{% endif %}</td>
+          <td>
+            <div class="meter {{ 'over' if dish.above_target else '' }}" title="{{ '%.1f' | format(dish.food_cost_pct) }}%">
+              <span style="width: {{ [dish.food_cost_pct, 100] | min }}%"></span>
+              <i style="left: {{ target }}%"></i>
+            </div>
+            <span class="meter-label {{ 'over' if dish.above_target else '' }}">
+              {{ "%.1f" | format(dish.food_cost_pct) }}%{% if dish.above_target %} · review price{% endif %}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="card" id="new-dish">
+  <h2>Add a dish</h2>
+  <p class="hint">Choose its type, set the price and build its recipe. The cost is worked out from the ingredients.</p>
+
+  {% if added %}<p class="notice success">Dish “{{ added }}” added to the menu.</p>{% endif %}
+  {% if errors %}
+  <div class="notice error">
+    {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="/sales/dishes#new-dish" class="form dish-form">
+    <div class="dish-fields">
+      <label>Name<input name="name" value="{{ form.name or '' }}" required minlength="2" placeholder="Tiramisu"></label>
+      <label>Type
+        <select name="category" required>
+          <option value="">Choose…</option>
+          {% for c in categories %}
+          <option value="{{ c }}" {{ 'selected' if form.category == c else '' }}>{{ c | capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Price (€)<input name="price" type="number" step="0.01" min="0.01" value="{{ form.price or '' }}" required></label>
+    </div>
+
+    <fieldset class="choices recipe-rows">
+      <legend>Recipe: ingredients for one portion</legend>
+      {% set rows = form.rows or [] %}
+      {% for n in range(6) %}
+      {% set row = rows[n] if n < rows | length else ("", "") %}
+      <div class="recipe-row">
+        <select name="ingredient_id">
+          <option value="">–</option>
+          {% for i in ingredients %}
+          <option value="{{ i.id }}" data-cost="{{ i.unit_cost }}" data-unit="{{ i.unit }}" {{ 'selected' if row[0] == i.id | string else '' }}>{{ i.name }} ({{ i.unit_cost | eur }}/{{ i.unit }})</option>
+          {% endfor %}
+        </select>
+        <input name="quantity" type="number" step="any" min="0" value="{{ row[1] }}" placeholder="Quantity">
+        <span class="unit muted"></span>
+      </div>
+      {% endfor %}
+    </fieldset>
+
+    <div class="preview">
+      <div><span class="muted">Ingredient cost</span><strong id="preview-cost">€0.00</strong></div>
+      <div><span class="muted">Margin</span><strong id="preview-margin">–</strong></div>
+      <div><span class="muted">Markup</span><strong id="preview-markup">–</strong></div>
+      <div><span class="muted">Food cost</span><strong id="preview-fc">–</strong></div>
+    </div>
+
+    <button type="submit">Add dish</button>
+  </form>
+</section>
+
+<script>
+  // Tabs: one per type of dish
+  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab));
+    document.querySelectorAll(".dish-panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + tab.dataset.category));
+  }));
+
+  // Live preview of the cost while the recipe is being written (the server calculates it again when saving)
+  const form = document.querySelector(".dish-form");
+  const euro = (v) => "€" + v.toFixed(2);
+  function preview() {
+    let cost = 0;
+    form.querySelectorAll(".recipe-row").forEach(row => {
+      const option = row.querySelector("select").selectedOptions[0];
+      const quantity = parseFloat(row.querySelector("input").value) || 0;
+      row.querySelector(".unit").textContent = option.dataset.unit || "";
+      cost += (parseFloat(option.dataset.cost) || 0) * quantity;
+    });
+    const price = parseFloat(form.price.value) || 0;
+    document.getElementById("preview-cost").textContent = euro(cost);
+    document.getElementById("preview-margin").textContent = price ? euro(price - cost) : "–";
+    document.getElementById("preview-markup").textContent = price && cost ? "+" + Math.round((price - cost) / cost * 100) + "%" : "–";
+    const fc = document.getElementById("preview-fc");
+    fc.textContent = price ? (cost / price * 100).toFixed(1) + "%" : "–";
+    fc.classList.toggle("over", price > 0 && cost / price * 100 > {{ target }});
+  }
+  form.addEventListener("input", preview);
+  preview();
+</script>
+{% endblock %}
