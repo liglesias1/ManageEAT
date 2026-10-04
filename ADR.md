@@ -3,9 +3,9 @@
 ## 1. Backend framework: Python + FastAPI, with SQLite3
 Date: 2026-09-30
 Status: Decided
-Context: ManageEAT has two analysis domains (sales and personnel) that must run as one Python process now and become separate services in Assignment 2.
-Decision: Python with FastAPI served by Uvicorn, one APIRouter per domain, Jinja2 templates for the pages, and the standard-library sqlite3 module instead of an ORM.
-Alternatives considered: Django was rejected because its admin panel, authentication and ORM are not needed and would add weight without benefit. Flask would also work, but FastAPI gives Pydantic validation and automatic API documentation at /docs without extra packages. SQLAlchemy was rejected because most queries are aggregations (orders per hour, units sold per dish) that are clearer in plain SQL.
+Context: ManageEAT has two analysis domains (sales and personnel) that must run as one Python process now and become separate services in Assignment 2. Python is the language I know best, so I chose a stack I can explain line by line.
+Decision: Python with FastAPI served by Uvicorn, one APIRouter per domain, Jinja2 templates rendered by the same process for the pages, and the standard-library sqlite3 module instead of an ORM.
+Alternatives considered: Django was rejected because its admin panel, authentication and ORM are not needed and would add weight without benefit. Flask would also work, but FastAPI gives Pydantic validation and automatic API documentation at /docs without extra packages. SQLAlchemy was rejected because most queries are aggregations (orders per hour, units sold per dish) that are clearer in plain SQL, and a separate React frontend was rejected because it needs its own build and a second process to serve it.
 Consequences: Each domain's router can later move into its own service with few changes. Without an ORM, every schema change has to be written by hand in SQL.
 
 
@@ -13,9 +13,9 @@ Consequences: Each domain's router can later move into its own service with few 
 Date: 2026-10-01
 Status: Decided
 Context: Sales and personnel analyse the same POS orders, and the profit and loss statement in sales needs the wage cost that personnel calculates. Assignment 2 will split them into two services, so the boundary has to be clear now.
-Decision: Each domain owns its tables, routes, services, repository and seed and never imports the other, except sales calling personnel.services.labor_cost(start, end); the order and clock-in tables are read-only input shared by both.
+Decision: Each domain owns its tables, routes, services, repository and seed and never imports the other, except sales calling personnel.services.labor_cost(start, end); the order and clock-in tables are read-only input shared by both. Inside each domain all SQL lives in repository.py and all calculations in services.py, and profit_and_loss() receives the wage function as a parameter instead of importing it.
 Alternatives considered: A single shared models.py was rejected because every change would touch both domains. Letting sales join personnel's tables in SQL to get wages was rejected because it couples the domains at the database level, which is exactly what breaks when they are split.
-Consequences: In Assignment 2, labor_cost() becomes one HTTP call and the business logic stays the same, and tests/test_architecture.py fails if any other import crosses the boundary. The overview home page sits outside both domains and only calls their public functions, so it would become the client of the two services.
+Consequences: In Assignment 2, only the function passed to profit_and_loss() changes, from labor_cost() to an HTTP call, and tests/test_architecture.py fails if any other import crosses the boundary. Calculations can be tested without a database, and the overview home page, which sits outside both domains and only calls their public functions, would become the client of the two services.
 
 
 ## 3. Data model: three zones, derived values calculated instead of stored
@@ -30,10 +30,11 @@ Consequences: Figures always match the latest prices, at the cost of heavier que
 ## 4. Testing strategy: test each layer where its logic lives, on a throw-away database
 Date: 2026-10-03
 Status: Decided
-Context: The value of ManageEAT is in its calculations (menu classes, stock, staffing, payroll, profit and loss), and a wrong number misleads the manager without any visible error. The assignment requires at least 70% coverage of the core logic.
-Decision: Services are tested as pure functions with small hand-made inputs, repositories against a fresh in-memory SQLite database per test, and pages and forms end to end with FastAPI's TestClient on a temporary data folder, plus one architecture test that enforces the boundary of ADR-2. Coverage is measured on domains/ and overview.py with pytest-cov.
+Context: The value of ManageEAT is in its calculations (menu classes, stock, staffing, payroll, profit and loss), and a wrong number misleads the manager without any visible error. The assignment requires at least 70% coverage of the core logic, so the calculations were tested first.
+Decision: Services are tested as pure functions with small hand-made inputs, repositories against a fresh in-memory SQLite database per test, and pages and forms end to end with FastAPI's TestClient on a temporary data folder, plus one architecture test that enforces the boundary of ADR-2. Coverage is measured with pytest-cov on the two services.py files, where the unit tests alone reach 100%, and on all of domains/ and overview.py for the full suite.
 Alternatives considered: Testing only through the pages was rejected because, when a number is wrong, the test cannot show whether the SQL or the calculation failed. Mocking the database was rejected because in-memory SQLite is just as fast and tests the real queries.
 Consequences: Left thinner on purpose: the JavaScript in the templates (charts, tabs, live cost preview) has no automated tests because it only draws numbers the server has already calculated and tested, and the demo data generators are only checked through the page tests. Page tests rely on the fixed-seed demo data, so changing the seed changes some expected values, which is intended.
+
 
 ## 5. Not built: restaurant accounts (register a restaurant and log in)
 Date: 2026-10-04
