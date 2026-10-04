@@ -1,6 +1,6 @@
 # ManageEAT
 
-Management dashboard for restaurant managers. It analyses the data that the restaurant's existing systems already record (orders taken on the waiters' devices and staff clock-ins) and turns it into decisions in two areas:
+Management dashboard for restaurant managers. It analyses the data that the restaurant's existing systems already record (orders taken on the waiters' devices and staff clock-ins), but rarely process and turns it into actionable data that can guide managers to take decisions in two areas:
 
 - **Sales**: menu and recipes (cost, markup and food cost of every dish), menu engineering (stars, plowhorses, puzzles, dogs), inventory and reorder alerts, suppliers and deliveries, profit and loss.
 - **Personnel**: customer demand per day and hour, recommended vs. actual staff per role, hours worked and payroll.
@@ -48,11 +48,21 @@ The database is always stored at `$DATA_DIR/manageeat.db`. Delete it at any time
 
 ## Tests and coverage
 
+The core business logic of both domains lives in `domains/sales/services.py` and `domains/personnel/services.py` (calculations only, no SQL or routing). The unit tests alone cover all of it:
+
+```bash
+pytest tests/sales/test_menu_engineering.py tests/sales/test_inventory.py tests/sales/test_profit_loss.py tests/sales/test_dishes.py tests/personnel/test_schedule.py tests/personnel/test_payroll.py --cov=domains.sales.services --cov=domains.personnel.services --cov-report=term-missing
+```
+
+Result: **62 passed, 100% coverage of the business logic** (186 statements).
+
+The full suite also tests the SQL, the pages and forms, and the boundary between the domains:
+
 ```bash
 pytest --cov=domains --cov=overview --cov-report=term-missing
 ```
 
-Result: **120 passed, 100% coverage** of `domains/` and `overview.py`, where all the business logic lives. Every test uses its own throw-away database, so the tests never touch `data/`. The testing approach is explained in ADR-4.
+Result: **120 passed, 100% coverage** of `domains/` and `overview.py`. Every test uses its own throw-away database, so the tests never touch `data/`. The testing approach is explained in ADR-4.
 
 ## Project structure
 
@@ -70,7 +80,7 @@ static/             CSS and Chart.js (stored locally, no internet needed)
 tests/              pytest tests for each domain, the overview and the domain boundary
 ```
 
-The two domains only meet at one function: sales calls `personnel.services.labor_cost()` to get the wage cost for the profit and loss statement (ADR-2). `tests/test_architecture.py` fails if any other import crosses that boundary.
+ManageEAT is a modular monolith: one process and one SQLite database, with two domains that only meet at one function. Sales calls `personnel.services.labor_cost()` to get the wage cost for the profit and loss statement (ADR-2), and `tests/test_architecture.py` fails if any other import crosses that boundary.
 
 ## Documentation
 
