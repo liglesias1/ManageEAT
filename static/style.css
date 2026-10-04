@@ -235,3 +235,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .preview strong { font-size: 17px; }
 .badge.new { color: var(--muted); background: var(--line); }
 .subhead { margin: 24px 0 4px; font-size: 15px; }
+
+
+/* Add ingredient form */
+.ingredient-fields { display: grid; grid-template-columns: 2fr repeat(5, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.supplier-choice { max-height: none; display: grid; gap: 12px; }
+.segmented { display: flex; gap: 24px; }
+.new-supplier-fields { display: grid; grid-template-columns: 2fr 1.5fr 2fr 1fr; gap: 12px; }
+.supplier-panel[hidden] { display: none; }

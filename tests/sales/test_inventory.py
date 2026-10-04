@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from domains.sales.schemas import PurchaseIn, SupplierIn
+from domains.sales.schemas import IngredientIn, PurchaseIn, SupplierIn
 from domains.sales.services import inventory_summary, stock_status, supplier_summary
 
 
@@ -128,3 +128,27 @@ def test_purchase_needs_positive_quantity_and_a_real_date():
         PurchaseIn(ingredient_id=2, quantity=0, unit_price=6.5, received_on="2026-09-27")
     with pytest.raises(ValidationError):
         PurchaseIn(ingredient_id=2, quantity=5, unit_price=6.5, received_on="27/09/2026")
+
+
+
+
+INGREDIENT = {"name": " Mascarpone ", "unit": "kg", "unit_cost": "7.5", "counted_stock": "5",
+              "reorder_level": "1", "counted_at": "2026-09-28"}
+
+
+def test_ingredient_form_validates_unit_price_and_stock():
+    assert IngredientIn(**INGREDIENT, supplier_id="4").name == "Mascarpone"
+    for wrong in ({"unit": "box"}, {"unit_cost": "0"}, {"counted_stock": "-1"}, {"counted_at": "yesterday"}):
+        with pytest.raises(ValidationError):
+            IngredientIn(**{**INGREDIENT, **wrong}, supplier_id="4")
+
+
+def test_ingredient_needs_exactly_one_supplier():
+    new_supplier = {"name": "Quesos Italia", "phone": "", "email": "ordini@quesos.it", "lead_time_days": "3"}
+    assert IngredientIn(**INGREDIENT, new_supplier=new_supplier).new_supplier.name == "Quesos Italia"
+    with pytest.raises(ValidationError):
+        IngredientIn(**INGREDIENT, supplier_id="")                                  # none
+    with pytest.raises(ValidationError):
+        IngredientIn(**INGREDIENT, supplier_id="4", new_supplier=new_supplier)      # both
+    with pytest.raises(ValidationError):
+        IngredientIn(**INGREDIENT, new_supplier={**new_supplier, "email": ""})       # new one without contact

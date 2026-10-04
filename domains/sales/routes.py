@@ -9,7 +9,7 @@ from database import get_connection
 from domains.personnel.services import labor_cost  # the only thing sales uses from personnel (see ADR-2)
 from domains.sales import repository
 from domains.sales.repository import get_dish_sales
-from domains.sales.schemas import DishIn, FixedExpenseIn, PurchaseIn, SupplierIn
+from domains.sales.schemas import DishIn, FixedExpenseIn, IngredientIn, PurchaseIn, SupplierIn
 from domains.sales.services import (
     FOOD_COST_TARGET,
     classify_menu,
@@ -126,7 +126,8 @@ def create_dish(
     return RedirectResponse(url=f"/sales/dishes?added={dish.name}", status_code=303)
 
 
-def _inventory_page(request, errors=None, form=None, added=None, status_code=200):
+def _inventory_page(request, errors=None, form=None, added=None, status_code=200,
+                    ingredient_errors=None, ingredient_form=None):
     conn = get_connection()
     try:
         stock = stock_status(repository.get_stock_levels(conn), repository.get_last_order_day(conn))
@@ -148,6 +149,9 @@ def _inventory_page(request, errors=None, form=None, added=None, status_code=200
             "errors": errors or [],
             "form": form or {},
             "added": added,
+            # The page has two forms (ingredient and supplier), each with its own messages
+            "ingredient_errors": ingredient_errors or [],
+            "ingredient_form": ingredient_form or {"counted_at": as_of, "unit": "kg", "supplier_choice": "existing"},
         },
         status_code=status_code,
     )
@@ -156,6 +160,67 @@ def _inventory_page(request, errors=None, form=None, added=None, status_code=200
 @router.get("/inventory", response_class=HTMLResponse)
 def inventory_page(request: Request, added: str = None):
     return _inventory_page(request, added=added)
+
+
+@router.post("/inventory/ingredients", response_class=HTMLResponse)
+def create_ingredient(
+    request: Request,
+    name: str = Form(""),
+    unit: str = Form(""),
+    unit_cost: str = Form(""),
+    counted_stock: str = Form(""),
+    reorder_level: str = Form(""),
+    counted_at: str = Form(""),
+    supplier_choice: str = Form("existing"),
+    supplier_id: str = Form(""),
+    new_supplier_name: str = Form(""),
+    new_supplier_phone: str = Form(""),
+    new_supplier_email: str = Form(""),
+    new_supplier_lead_time: str = Form(""),
+):
+    form = {"name": name, "unit": unit, "unit_cost": unit_cost, "counted_stock": counted_stock,
+            "reorder_level": reorder_level, "counted_at": counted_at, "supplier_choice": supplier_choice,
+            "supplier_id": supplier_id, "new_supplier_name": new_supplier_name, "new_supplier_phone": new_supplier_phone,
+            "new_supplier_email": new_supplier_email, "new_supplier_lead_time": new_supplier_lead_time}
+    data = {key: form[key] for key in ("name", "unit", "unit_cost", "counted_stock", "reorder_level", "counted_at")}
+    if supplier_choice == "new":
+        data["new_supplier"] = {"name": new_supplier_name, "phone": new_supplier_phone,
+                                "email": new_supplier_email, "lead_time_days": new_supplier_lead_time}
+    else:
+        data["supplier_id"] = supplier_id
+    try:
+        ingredient = IngredientIn(**data)
+    except ValidationError as error:
+        messages = []
+        for e in error.errors():
+            # e.g. ("new_supplier", "email") -> "New supplier email"
+            where = " ".join(str(part) for part in e["loc"]).replace("_", " ").capitalize() or "Supplier"
+            messages.append(f"{where}: {e['msg'].replace('Value error, ', '').lower()}")
+        return _inventory_page(request, ingredient_errors=messages, ingredient_form=form, status_code=422)
+
+    conn = get_connection()
+    try:
+        problem = None
+        if ingredient.supplier_id is not None and repository.get_supplier(conn, ingredient.supplier_id) is None:
+            problem = "Supplier: choose one of the suppliers in the list"
+        elif ingredient.name.lower() in {i["name"].lower() for i in repository.get_ingredient_choices(conn)}:
+            problem = "Name: there is already an ingredient with that name"
+        else:
+            new = ingredient.new_supplier
+            saved_supplier = repository.add_ingredient(
+                conn, ingredient.name, ingredient.unit, ingredient.unit_cost, ingredient.counted_stock,
+                ingredient.counted_at.isoformat(), ingredient.reorder_level,
+                supplier_id=ingredient.supplier_id,
+                new_supplier=(new.name, new.phone, new.email, new.lead_time_days) if new else None,
+            )
+    finally:
+        conn.close()
+
+    if problem:
+        return _inventory_page(request, ingredient_errors=[problem], ingredient_form=form, status_code=422)
+    # The supplier's page now lists the new product, ready to record its first delivery
+    return RedirectResponse(url=f"/sales/suppliers/{saved_supplier}?new_ingredient={ingredient.name}",
+                            status_code=303)
 
 
 @router.post("/inventory/suppliers", response_class=HTMLResponse)
@@ -186,7 +251,8 @@ def create_supplier(
     return RedirectResponse(url=f"/sales/inventory?added={supplier.name}", status_code=303)
 
 
-def _supplier_page(request, supplier_id, errors=None, form=None, added=False, status_code=200):
+def _supplier_page(request, supplier_id, errors=None, form=None, added=False, status_code=200,
+                   new_ingredient=None):
     conn = get_connection()
     try:
         supplier = repository.get_supplier(conn, supplier_id)
@@ -210,14 +276,15 @@ def _supplier_page(request, supplier_id, errors=None, form=None, added=False, st
             "errors": errors or [],
             "form": form or {"received_on": as_of},
             "added": added,
+            "new_ingredient": new_ingredient,
         },
         status_code=status_code,
     )
 
 
 @router.get("/suppliers/{supplier_id}", response_class=HTMLResponse)
-def supplier_page(request: Request, supplier_id: int, added: bool = False):
-    return _supplier_page(request, supplier_id, added=added)
+def supplier_page(request: Request, supplier_id: int, added: bool = False, new_ingredient: str = None):
+    return _supplier_page(request, supplier_id, added=added, new_ingredient=new_ingredient)
 
 
 @router.post("/suppliers/{supplier_id}/purchases", response_class=HTMLResponse)

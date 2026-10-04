@@ -8,6 +8,12 @@
 {% endblock %}
 
 {% block content %}
+{% if new_ingredient %}
+<p class="notice success">
+  Ingredient “{{ new_ingredient }}” added and linked to {{ supplier.name }}.
+  Record its first delivery below, or <a class="link" href="/sales/dishes#new-dish">use it in a dish →</a>
+</p>
+{% endif %}
 <section class="kpis">
   <div class="kpi highlight">
     <div class="label">

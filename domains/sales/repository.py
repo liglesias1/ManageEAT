@@ -218,3 +218,25 @@ def add_dish(conn, code, name, category, price, recipe):
             "INSERT INTO recipes (item_code, ingredient_id, quantity) VALUES (?, ?, ?)",
             [(code, ingredient_id, quantity) for ingredient_id, quantity in recipe],
         )
+
+
+def add_ingredient(conn, name, unit, unit_cost, counted_stock, counted_at, reorder_level,
+                   supplier_id=None, new_supplier=None):
+    """Saves a new ingredient with its first stock count, and returns the id of its supplier.
+
+    If `new_supplier` is given (name, phone, email, lead_time_days), the supplier is created first.
+    Both are saved in one transaction: an ingredient never ends up without its supplier.
+    """
+    with conn:
+        if new_supplier is not None:
+            supplier_id = conn.execute(
+                "INSERT INTO suppliers (name, phone, email, lead_time_days) VALUES (?, ?, ?, ?)", new_supplier
+            ).lastrowid
+        conn.execute(
+            """
+            INSERT INTO ingredients (name, unit, unit_cost, supplier_id, counted_stock, counted_at, reorder_level)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (name, unit, unit_cost, supplier_id, counted_stock, counted_at, reorder_level),
+        )
+    return supplier_id
