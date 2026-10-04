@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ dish.name }}{% endblock %}
+{% block heading %}Edit {{ dish.name }}{% endblock %}
+{% block intro %}
+Change the name, type, price or recipe of this dish. Its code ({{ dish.code }}) stays the same,
+so its past sales are still linked to it. <a class="link" href="/sales/dishes">← Back to the menu</a>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  {% if errors %}
+  <div class="notice error">
+    {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+  </div>
+  {% endif %}
+  {% set action = "/sales/dishes/" ~ dish.code ~ "/edit" %}{% set button = "Save changes" %}
+  {% include "sales/_dish_form.html" %}
+</section>
+{% endblock %}

@@ -64,7 +64,7 @@ and what to order before it runs out. Figures as of {{ as_of or "–" }}.
     <tbody>
       {% for item in stock %}
       <tr>
-        <td>{{ item.name }}</td>
+        <td>{{ item.name }} <a class="link small" href="/sales/ingredients/{{ item.id }}/edit">Edit</a></td>
         <td><a class="link" href="/sales/suppliers/{{ item.supplier_id }}">{{ item.supplier }}</a></td>
         <td class="num">{{ "%.1f" | format(item.current if item.current > 0 else 0) }} {{ item.unit }}</td>
         <td class="num">{{ "%.1f" | format(item.daily_use) }}</td>

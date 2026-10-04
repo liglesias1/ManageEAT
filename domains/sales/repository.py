@@ -240,3 +240,66 @@ def add_ingredient(conn, name, unit, unit_cost, counted_stock, counted_at, reord
             (name, unit, unit_cost, supplier_id, counted_stock, counted_at, reorder_level),
         )
     return supplier_id
+
+
+
+# ---------- Editing ----------
+
+def get_dish(conn, code):
+    """One dish of the menu, or None if it does not exist."""
+    row = conn.execute("SELECT code, name, category, price FROM menu_items WHERE code = ?", (code,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_recipe(conn, code):
+    """The recipe of one dish as a list of (ingredient_id, quantity per portion)."""
+    rows = conn.execute(
+        "SELECT ingredient_id, quantity FROM recipes WHERE item_code = ? ORDER BY ingredient_id", (code,)
+    ).fetchall()
+    return [(row["ingredient_id"], row["quantity"]) for row in rows]
+
+
+def update_dish(conn, code, name, category, price, recipe):
+    """Changes a dish and replaces its whole recipe, in one transaction."""
+    with conn:
+        conn.execute(
+            "UPDATE menu_items SET name = ?, category = ?, price = ? WHERE code = ?", (name, category, price, code)
+        )
+        conn.execute("DELETE FROM recipes WHERE item_code = ?", (code,))
+        conn.executemany(
+            "INSERT INTO recipes (item_code, ingredient_id, quantity) VALUES (?, ?, ?)",
+            [(code, ingredient_id, quantity) for ingredient_id, quantity in recipe],
+        )
+
+
+def get_ingredient(conn, ingredient_id):
+    """One ingredient with its supplier and last stock count, or None if it does not exist."""
+    row = conn.execute(
+        """
+        SELECT id, name, unit, unit_cost, supplier_id, counted_stock, counted_at, reorder_level
+          FROM ingredients WHERE id = ?
+        """,
+        (ingredient_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def update_ingredient(conn, ingredient_id, name, unit, unit_cost, supplier_id, counted_stock, counted_at,
+                      reorder_level):
+    conn.execute(
+        """
+        UPDATE ingredients
+           SET name = ?, unit = ?, unit_cost = ?, supplier_id = ?, counted_stock = ?, counted_at = ?, reorder_level = ?
+         WHERE id = ?
+        """,
+        (name, unit, unit_cost, supplier_id, counted_stock, counted_at, reorder_level, ingredient_id),
+    )
+    conn.commit()
+
+
+def update_supplier(conn, supplier_id, name, phone, email, lead_time_days):
+    conn.execute(
+        "UPDATE suppliers SET name = ?, phone = ?, email = ?, lead_time_days = ? WHERE id = ?",
+        (name, phone, email, lead_time_days, supplier_id),
+    )
+    conn.commit()

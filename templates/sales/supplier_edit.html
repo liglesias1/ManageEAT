@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ supplier.name }}{% endblock %}
+{% block heading %}Edit {{ supplier.name }}{% endblock %}
+{% block intro %}
+Change the contact details or the delivery time. To move a product to another supplier, edit the product.
+<a class="link" href="/sales/suppliers/{{ supplier.id }}">← Back to {{ supplier.name }}</a>
+{% endblock %}
+
+{% block content %}
+<section class="card narrow">
+  <p class="hint">Every supplier needs a phone number or an email so orders can be placed.</p>
+  {% if errors %}
+  <div class="notice error">
+    {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="/sales/suppliers/{{ supplier.id }}/edit" class="form">
+    <label>Name<input name="name" value="{{ form.name or '' }}" required minlength="2"></label>
+    <label>Phone<input name="phone" value="{{ form.phone or '' }}" placeholder="+34 600 000 000"></label>
+    <label>Email<input name="email" type="email" value="{{ form.email or '' }}" placeholder="orders@supplier.com"></label>
+    <label>Delivery time (days)<input name="lead_time_days" type="number" min="0" max="60" value="{{ form.lead_time_days }}" required></label>
+    <button type="submit">Save changes</button>
+  </form>
+</section>
+{% endblock %}

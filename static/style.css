@@ -243,3 +243,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .segmented { display: flex; gap: 24px; }
 .new-supplier-fields { display: grid; grid-template-columns: 2fr 1.5fr 2fr 1fr; gap: 12px; }
 .supplier-panel[hidden] { display: none; }
+
+
+/* Edit links and pages */
+.link.small { font-size: 12px; font-weight: 600; margin-left: 6px; }
+details .link.small { display: inline-block; margin: 0 0 6px 16px; }
+.card.narrow { max-width: 560px; }
+.ingredient-fields input, .ingredient-fields select, .dish-fields input, .dish-fields select { width: 100%; min-width: 0; }
