@@ -87,6 +87,12 @@ Every dish is compared only with the other dishes of its category.
     </table>
   </div>
   {% endfor %}
+
+  {% if new_dishes %}
+  <h3 class="subhead">New on the menu</h3>
+  <p class="hint">Not sold yet, so they are not classified. <a class="link" href="/sales/dishes">See their recipes →</a></p>
+  <p>{% for dish in new_dishes %}<span class="badge new">{{ dish.name }}</span> {% endfor %}</p>
+  {% endif %}
 </section>
 
 <script>

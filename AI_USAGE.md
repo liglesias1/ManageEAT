@@ -32,3 +32,10 @@
 
 | 2026-10-03 | Claude | Build an overview home page that brings together the key figures of every page | Modified | I asked for a page that combines the figures of all the other pages, with links to each one. It was placed outside the domains (overview.py) so it only calls their public functions and the domain boundary stays intact. Its alerts point to the page where each problem can be fixed | |
 | 2026-10-03 | Claude | Write ADR-4 on the testing strategy | Modified | I described the four kinds of tests we already had (services, repository, pages, architecture) and why mocks of the database were not used | |
+
+
+| 2026-10-04 | Claude | Calculate the ingredient cost, markup and food cost of every dish from its recipe, and add prices to the menu | Modified | I asked for a page with every dish, its price, what its ingredients cost and how much above that cost we charge. A menu price was added to the dishes, separate from the price charged in each order, and ADR-3 was updated. Dishes with no sales yet are shown as "new" instead of being classified as dogs | |
+| 2026-10-04 | Claude | Build the menu and recipes page with a form to add dishes classified by type | Accepted | | |
+| 2026-10-04 | Claude | Add new ingredients with the supplier that sells them | Modified | When I tried to add a tiramisu, its ingredients did not exist in the app, so I asked for a form to add ingredients and to choose an existing supplier or create a new one in the same step. After saving, the app opens that supplier's page so the first delivery can be recorded | |
+| 2026-10-04 | Claude | Edit dishes and their recipes, ingredients and suppliers | Modified | I asked for edit buttons. The supplier of an ingredient is changed from the ingredient page, because every ingredient must always have exactly one supplier | |
+| 2026-10-04 | Claude | Review ADR.md against the format required by the assignment | Modified | Entries were shortened to the required number of sentences, ADR-1 got its status, ADR-3 now includes menu prices and the one-supplier rule, and ADR-4 says what is tested less and why | |

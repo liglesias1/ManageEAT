@@ -9,11 +9,15 @@ from database import get_connection
 from domains.personnel.services import labor_cost  # the only thing sales uses from personnel (see ADR-2)
 from domains.sales import repository
 from domains.sales.repository import get_dish_sales
-from domains.sales.schemas import FixedExpenseIn, PurchaseIn, SupplierIn
+from domains.sales.schemas import DishIn, FixedExpenseIn, IngredientIn, PurchaseIn, SupplierIn
 from domains.sales.services import (
+    FOOD_COST_TARGET,
     classify_menu,
+    cost_dishes,
+    dishes_summary,
     inventory_summary,
     menu_summary,
+    new_dish_code,
     profit_and_loss,
     stock_status,
     supplier_summary,
@@ -35,16 +39,166 @@ def menu_page(request: Request):
 
     by_category = {c: [] for c in CATEGORY_ORDER}
     for dish in sorted(dishes, key=lambda d: d["units_sold"], reverse=True):
-        by_category[dish["category"]].append(dish)
+        if dish["class"] != "new":
+            by_category[dish["category"]].append(dish)
 
     return templates.TemplateResponse(
         request,
         "sales/menu.html",
-        {"by_category": by_category, "summary": menu_summary(dishes)},
+        {
+            "by_category": by_category,
+            "new_dishes": [d for d in dishes if d["class"] == "new"],
+            "summary": menu_summary(dishes),
+        },
     )
 
 
-def _inventory_page(request, errors=None, form=None, added=None, status_code=200):
+def _dishes_page(request, errors=None, form=None, added=None, status_code=200, updated=None):
+    conn = get_connection()
+    try:
+        costed = cost_dishes(repository.get_menu(conn), repository.get_recipe_lines(conn))
+        ingredients = repository.get_ingredient_choices(conn)
+    finally:
+        conn.close()
+
+    by_category = {c: [d for d in costed if d["category"] == c] for c in CATEGORY_ORDER}
+    return templates.TemplateResponse(
+        request,
+        "sales/dishes.html",
+        {
+            "by_category": by_category,
+            "summary": dishes_summary(costed),
+            "target": FOOD_COST_TARGET,
+            "ingredients": ingredients,
+            "categories": CATEGORY_ORDER,
+            "errors": errors or [],
+            "form": form or {},
+            "added": added,
+            "updated": updated,
+        },
+        status_code=status_code,
+    )
+
+
+@router.get("/dishes", response_class=HTMLResponse)
+def dishes_page(request: Request, added: str = None, updated: str = None):
+    return _dishes_page(request, added=added, updated=updated)
+
+
+def _read_dish_form(name, category, price, ingredient_id, quantity):
+    """Validates the dish form. Returns (dish or None, error messages, form values to show again)."""
+    # The form has several recipe rows; rows left without an ingredient are ignored
+    rows = [(i, q) for i, q in zip(ingredient_id, quantity) if i]
+    form = {"name": name, "category": category, "price": price, "rows": rows}
+    try:
+        dish = DishIn(
+            name=name,
+            category=category,
+            price=price,
+            recipe=[{"ingredient_id": i, "quantity": q} for i, q in rows],
+        )
+    except ValidationError as error:
+        messages = []
+        for e in error.errors():
+            field = "Ingredient quantity" if e["loc"][0] == "recipe" and len(e["loc"]) > 1 else e["loc"][0].capitalize()
+            if e["loc"][0] == "recipe" and e["type"] == "too_short":
+                messages.append("Recipe: add at least one ingredient")
+            else:
+                messages.append(f"{field}: {e['msg'].replace('Value error, ', '').lower()}")
+        return None, messages, form
+    return dish, [], form
+
+
+def _unknown_ingredients(conn, dish):
+    known = {i["id"] for i in repository.get_ingredient_choices(conn)}
+    return any(line.ingredient_id not in known for line in dish.recipe)
+
+
+@router.post("/dishes", response_class=HTMLResponse)
+def create_dish(
+    request: Request,
+    name: str = Form(""),
+    category: str = Form(""),
+    price: str = Form(""),
+    ingredient_id: List[str] = Form([]),
+    quantity: List[str] = Form([]),
+):
+    dish, errors, form = _read_dish_form(name, category, price, ingredient_id, quantity)
+    if errors:
+        return _dishes_page(request, errors=errors, form=form, status_code=422)
+
+    conn = get_connection()
+    try:
+        if _unknown_ingredients(conn, dish):
+            return _dishes_page(request, errors=["Recipe: unknown ingredient"], form=form, status_code=422)
+        code = new_dish_code(dish.name, {d["code"] for d in repository.get_menu(conn)})
+        repository.add_dish(conn, code, dish.name, dish.category, dish.price,
+                            [(line.ingredient_id, line.quantity) for line in dish.recipe])
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/sales/dishes?added={dish.name}", status_code=303)
+
+
+def _dish_edit_page(request, code, errors=None, form=None, status_code=200):
+    conn = get_connection()
+    try:
+        dish = repository.get_dish(conn, code)
+        if dish is None:
+            raise HTTPException(status_code=404, detail="Dish not found")
+        recipe = repository.get_recipe(conn, code)
+        ingredients = repository.get_ingredient_choices(conn)
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        request,
+        "sales/dish_edit.html",
+        {
+            "dish": dish,
+            "form": form or {**dish, "rows": [(str(i), f"{q:g}") for i, q in recipe]},
+            "errors": errors or [],
+            "categories": CATEGORY_ORDER,
+            "ingredients": ingredients,
+            "target": FOOD_COST_TARGET,
+        },
+        status_code=status_code,
+    )
+
+
+@router.get("/dishes/{code}/edit", response_class=HTMLResponse)
+def edit_dish_page(request: Request, code: str):
+    return _dish_edit_page(request, code)
+
+
+@router.post("/dishes/{code}/edit", response_class=HTMLResponse)
+def update_dish(
+    request: Request,
+    code: str,
+    name: str = Form(""),
+    category: str = Form(""),
+    price: str = Form(""),
+    ingredient_id: List[str] = Form([]),
+    quantity: List[str] = Form([]),
+):
+    dish, errors, form = _read_dish_form(name, category, price, ingredient_id, quantity)
+    if errors:
+        return _dish_edit_page(request, code, errors=errors, form=form, status_code=422)
+
+    conn = get_connection()
+    try:
+        if repository.get_dish(conn, code) is None:
+            raise HTTPException(status_code=404, detail="Dish not found")
+        if _unknown_ingredients(conn, dish):
+            return _dish_edit_page(request, code, errors=["Recipe: unknown ingredient"], form=form, status_code=422)
+        repository.update_dish(conn, code, dish.name, dish.category, dish.price,
+                               [(line.ingredient_id, line.quantity) for line in dish.recipe])
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/sales/dishes?updated={dish.name}", status_code=303)
+
+
+def _inventory_page(request, errors=None, form=None, added=None, status_code=200,
+                    ingredient_errors=None, ingredient_form=None):
     conn = get_connection()
     try:
         stock = stock_status(repository.get_stock_levels(conn), repository.get_last_order_day(conn))
@@ -66,6 +220,9 @@ def _inventory_page(request, errors=None, form=None, added=None, status_code=200
             "errors": errors or [],
             "form": form or {},
             "added": added,
+            # The page has two forms (ingredient and supplier), each with its own messages
+            "ingredient_errors": ingredient_errors or [],
+            "ingredient_form": ingredient_form or {"counted_at": as_of, "unit": "kg", "supplier_choice": "existing"},
         },
         status_code=status_code,
     )
@@ -74,6 +231,67 @@ def _inventory_page(request, errors=None, form=None, added=None, status_code=200
 @router.get("/inventory", response_class=HTMLResponse)
 def inventory_page(request: Request, added: str = None):
     return _inventory_page(request, added=added)
+
+
+@router.post("/inventory/ingredients", response_class=HTMLResponse)
+def create_ingredient(
+    request: Request,
+    name: str = Form(""),
+    unit: str = Form(""),
+    unit_cost: str = Form(""),
+    counted_stock: str = Form(""),
+    reorder_level: str = Form(""),
+    counted_at: str = Form(""),
+    supplier_choice: str = Form("existing"),
+    supplier_id: str = Form(""),
+    new_supplier_name: str = Form(""),
+    new_supplier_phone: str = Form(""),
+    new_supplier_email: str = Form(""),
+    new_supplier_lead_time: str = Form(""),
+):
+    form = {"name": name, "unit": unit, "unit_cost": unit_cost, "counted_stock": counted_stock,
+            "reorder_level": reorder_level, "counted_at": counted_at, "supplier_choice": supplier_choice,
+            "supplier_id": supplier_id, "new_supplier_name": new_supplier_name, "new_supplier_phone": new_supplier_phone,
+            "new_supplier_email": new_supplier_email, "new_supplier_lead_time": new_supplier_lead_time}
+    data = {key: form[key] for key in ("name", "unit", "unit_cost", "counted_stock", "reorder_level", "counted_at")}
+    if supplier_choice == "new":
+        data["new_supplier"] = {"name": new_supplier_name, "phone": new_supplier_phone,
+                                "email": new_supplier_email, "lead_time_days": new_supplier_lead_time}
+    else:
+        data["supplier_id"] = supplier_id
+    try:
+        ingredient = IngredientIn(**data)
+    except ValidationError as error:
+        messages = []
+        for e in error.errors():
+            # e.g. ("new_supplier", "email") -> "New supplier email"
+            where = " ".join(str(part) for part in e["loc"]).replace("_", " ").capitalize() or "Supplier"
+            messages.append(f"{where}: {e['msg'].replace('Value error, ', '').lower()}")
+        return _inventory_page(request, ingredient_errors=messages, ingredient_form=form, status_code=422)
+
+    conn = get_connection()
+    try:
+        problem = None
+        if ingredient.supplier_id is not None and repository.get_supplier(conn, ingredient.supplier_id) is None:
+            problem = "Supplier: choose one of the suppliers in the list"
+        elif ingredient.name.lower() in {i["name"].lower() for i in repository.get_ingredient_choices(conn)}:
+            problem = "Name: there is already an ingredient with that name"
+        else:
+            new = ingredient.new_supplier
+            saved_supplier = repository.add_ingredient(
+                conn, ingredient.name, ingredient.unit, ingredient.unit_cost, ingredient.counted_stock,
+                ingredient.counted_at.isoformat(), ingredient.reorder_level,
+                supplier_id=ingredient.supplier_id,
+                new_supplier=(new.name, new.phone, new.email, new.lead_time_days) if new else None,
+            )
+    finally:
+        conn.close()
+
+    if problem:
+        return _inventory_page(request, ingredient_errors=[problem], ingredient_form=form, status_code=422)
+    # The supplier's page now lists the new product, ready to record its first delivery
+    return RedirectResponse(url=f"/sales/suppliers/{saved_supplier}?new_ingredient={ingredient.name}",
+                            status_code=303)
 
 
 @router.post("/inventory/suppliers", response_class=HTMLResponse)
@@ -104,7 +322,131 @@ def create_supplier(
     return RedirectResponse(url=f"/sales/inventory?added={supplier.name}", status_code=303)
 
 
-def _supplier_page(request, supplier_id, errors=None, form=None, added=False, status_code=200):
+def _error_messages(error):
+    """Pydantic errors as short sentences for the forms, e.g. 'Unit cost: input should be greater than 0'."""
+    messages = []
+    for e in error.errors():
+        where = " ".join(str(part) for part in e["loc"]).replace("_", " ").capitalize()
+        message = e["msg"].replace("Value error, ", "")
+        messages.append(f"{where}: {message.lower()}" if where else message.capitalize())
+    return messages
+
+
+def _ingredient_edit_page(request, ingredient_id, errors=None, form=None, status_code=200):
+    conn = get_connection()
+    try:
+        ingredient = repository.get_ingredient(conn, ingredient_id)
+        if ingredient is None:
+            raise HTTPException(status_code=404, detail="Ingredient not found")
+        suppliers = repository.get_suppliers(conn)
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        request,
+        "sales/ingredient_edit.html",
+        {"ingredient": ingredient, "suppliers": suppliers, "form": form or ingredient, "errors": errors or []},
+        status_code=status_code,
+    )
+
+
+@router.get("/ingredients/{ingredient_id}/edit", response_class=HTMLResponse)
+def edit_ingredient_page(request: Request, ingredient_id: int):
+    return _ingredient_edit_page(request, ingredient_id)
+
+
+@router.post("/ingredients/{ingredient_id}/edit", response_class=HTMLResponse)
+def update_ingredient(
+    request: Request,
+    ingredient_id: int,
+    name: str = Form(""),
+    unit: str = Form(""),
+    unit_cost: str = Form(""),
+    counted_stock: str = Form(""),
+    reorder_level: str = Form(""),
+    counted_at: str = Form(""),
+    supplier_id: str = Form(""),
+):
+    form = {"name": name, "unit": unit, "unit_cost": unit_cost, "counted_stock": counted_stock,
+            "reorder_level": reorder_level, "counted_at": counted_at, "supplier_id": supplier_id}
+    try:
+        ingredient = IngredientIn(**form)      # same rules as when the ingredient was added
+    except ValidationError as error:
+        return _ingredient_edit_page(request, ingredient_id, errors=_error_messages(error), form=form, status_code=422)
+
+    conn = get_connection()
+    try:
+        current = repository.get_ingredient(conn, ingredient_id)
+        if current is None:
+            raise HTTPException(status_code=404, detail="Ingredient not found")
+        others = {i["name"].lower() for i in repository.get_ingredient_choices(conn) if i["id"] != ingredient_id}
+        problem = None
+        if repository.get_supplier(conn, ingredient.supplier_id) is None:
+            problem = "Supplier: choose one of the suppliers in the list"
+        elif ingredient.name.lower() in others:
+            problem = "Name: there is already an ingredient with that name"
+        else:
+            repository.update_ingredient(conn, ingredient_id, ingredient.name, ingredient.unit, ingredient.unit_cost,
+                                         ingredient.supplier_id, ingredient.counted_stock,
+                                         ingredient.counted_at.isoformat(), ingredient.reorder_level)
+    finally:
+        conn.close()
+
+    if problem:
+        return _ingredient_edit_page(request, ingredient_id, errors=[problem], form=form, status_code=422)
+    return RedirectResponse(url=f"/sales/suppliers/{ingredient.supplier_id}?updated={ingredient.name}",
+                            status_code=303)
+
+
+def _supplier_edit_page(request, supplier_id, errors=None, form=None, status_code=200):
+    conn = get_connection()
+    try:
+        supplier = repository.get_supplier(conn, supplier_id)
+    finally:
+        conn.close()
+    if supplier is None:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    return templates.TemplateResponse(
+        request,
+        "sales/supplier_edit.html",
+        {"supplier": supplier, "form": form or supplier, "errors": errors or []},
+        status_code=status_code,
+    )
+
+
+@router.get("/suppliers/{supplier_id}/edit", response_class=HTMLResponse)
+def edit_supplier_page(request: Request, supplier_id: int):
+    return _supplier_edit_page(request, supplier_id)
+
+
+@router.post("/suppliers/{supplier_id}/edit", response_class=HTMLResponse)
+def update_supplier(
+    request: Request,
+    supplier_id: int,
+    name: str = Form(""),
+    phone: str = Form(""),
+    email: str = Form(""),
+    lead_time_days: str = Form(""),
+):
+    form = {"name": name, "phone": phone, "email": email, "lead_time_days": lead_time_days}
+    try:
+        supplier = SupplierIn(**form)          # same rules as a new supplier: phone or email required
+    except ValidationError as error:
+        return _supplier_edit_page(request, supplier_id, errors=_error_messages(error), form=form, status_code=422)
+
+    conn = get_connection()
+    try:
+        if repository.get_supplier(conn, supplier_id) is None:
+            raise HTTPException(status_code=404, detail="Supplier not found")
+        repository.update_supplier(conn, supplier_id, supplier.name, supplier.phone, supplier.email,
+                                   supplier.lead_time_days)
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/sales/suppliers/{supplier_id}?updated={supplier.name}", status_code=303)
+
+
+def _supplier_page(request, supplier_id, errors=None, form=None, added=False, status_code=200,
+                   new_ingredient=None, updated=None):
     conn = get_connection()
     try:
         supplier = repository.get_supplier(conn, supplier_id)
@@ -128,14 +470,17 @@ def _supplier_page(request, supplier_id, errors=None, form=None, added=False, st
             "errors": errors or [],
             "form": form or {"received_on": as_of},
             "added": added,
+            "new_ingredient": new_ingredient,
+            "updated": updated,
         },
         status_code=status_code,
     )
 
 
 @router.get("/suppliers/{supplier_id}", response_class=HTMLResponse)
-def supplier_page(request: Request, supplier_id: int, added: bool = False):
-    return _supplier_page(request, supplier_id, added=added)
+def supplier_page(request: Request, supplier_id: int, added: bool = False, new_ingredient: str = None,
+                  updated: str = None):
+    return _supplier_page(request, supplier_id, added=added, new_ingredient=new_ingredient, updated=updated)
 
 
 @router.post("/suppliers/{supplier_id}/purchases", response_class=HTMLResponse)

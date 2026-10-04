@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Menu & recipes{% endblock %}
+{% block heading %}Menu & recipes{% endblock %}
+{% block intro %}
+Every dish on the menu with its price, what its ingredients cost and how much is left for the restaurant.
+Costs are calculated from each recipe and the current price of its ingredients.
+{% endblock %}
+
+{% block content %}
+<section class="kpis">
+  <div class="kpi highlight">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
+      Dishes on the menu
+    </div>
+    <div class="value">{{ summary.dishes }}</div>
+    <div class="note">Food and drinks</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+      Average food cost
+    </div>
+    <div class="value">{{ "%.1f" | format(summary.avg_food_cost_pct) }}%</div>
+    <div class="note">Share of the price spent on ingredients</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      Above {{ target }}% food cost
+    </div>
+    <div class="value">{{ summary.above_target }}</div>
+    <div class="note">Dishes whose price may be too low</div>
+  </div>
+  <div class="kpi">
+    <div class="label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></svg>
+      Highest food cost
+    </div>
+    <div class="value" style="font-size:19px">{{ summary.highest.name if summary.highest else "–" }}</div>
+    <div class="note">{% if summary.highest %}{{ "%.1f" | format(summary.highest.food_cost_pct) }}% of its price{% endif %}</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>The menu</h2>
+  <p class="hint">
+    <strong>Markup</strong>: how much the price is above the ingredient cost.
+    <strong>Food cost</strong>: share of the price spent on ingredients (restaurants aim for {{ target }}% or less).
+    Click a dish to see its recipe and edit it.
+  </p>
+  {% if updated %}<p class="notice success">Dish “{{ updated }}” updated.</p>{% endif %}
+
+  <div class="tabs">
+    {% for category, dishes in by_category.items() if dishes %}
+    <button class="tab {{ 'active' if loop.first else '' }}" data-category="{{ category }}">{{ category | capitalize }}s</button>
+    {% endfor %}
+  </div>
+
+  {% for category, dishes in by_category.items() if dishes %}
+  <div class="dish-panel {{ 'active' if loop.first else '' }}" id="panel-{{ category }}">
+    <table class="dishes">
+      <thead>
+        <tr>
+          <th>Dish</th>
+          <th class="num">Price</th>
+          <th class="num">Ingredients</th>
+          <th class="num">Margin</th>
+          <th class="num">Markup</th>
+          <th>Food cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dish in dishes %}
+        <tr>
+          <td>
+            <details>
+              <summary>{{ dish.name }} <span class="muted">{{ dish.code }}</span></summary>
+              <a class="link small" href="/sales/dishes/{{ dish.code }}/edit">Edit dish and recipe →</a>
+              <table class="recipe">
+                {% for line in dish.recipe %}
+                <tr>
+                  <td>{{ line.ingredient }}</td>
+                  <td class="num">{{ "%g" | format(line.quantity) }} {{ line.unit }}</td>
+                  <td class="num muted">× {{ line.unit_cost | eur }}</td>
+                  <td class="num">{{ line.line_cost | eur }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </details>
+          </td>
+          <td class="num">{{ dish.price | eur }}</td>
+          <td class="num">{{ dish.cost | eur }}</td>
+          <td class="num">{{ dish.margin | eur }}</td>
+          <td class="num">{% if dish.markup_pct is not none %}+{{ "%.0f" | format(dish.markup_pct) }}%{% else %}–{% endif %}</td>
+          <td>
+            <div class="meter {{ 'over' if dish.above_target else '' }}" title="{{ '%.1f' | format(dish.food_cost_pct) }}%">
+              <span style="width: {{ [dish.food_cost_pct, 100] | min }}%"></span>
+              <i style="left: {{ target }}%"></i>
+            </div>
+            <span class="meter-label {{ 'over' if dish.above_target else '' }}">
+              {{ "%.1f" | format(dish.food_cost_pct) }}%{% if dish.above_target %} · review price{% endif %}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="card" id="new-dish">
+  <h2>Add a dish</h2>
+  <p class="hint">
+    Choose its type, set the price and build its recipe. The cost is worked out from the ingredients.
+    Missing an ingredient? <a class="link" href="/sales/inventory#new-ingredient">Add it in Inventory →</a>
+  </p>
+
+  {% if added %}<p class="notice success">Dish “{{ added }}” added to the menu.</p>{% endif %}
+  {% if errors %}
+  <div class="notice error">
+    {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% set action = "/sales/dishes#new-dish" %}{% set button = "Add dish" %}
+  {% include "sales/_dish_form.html" %}
+</section>
+
+<script>
+  // Tabs: one per type of dish
+  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab));
+    document.querySelectorAll(".dish-panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + tab.dataset.category));
+  }));
+</script>
+{% endblock %}

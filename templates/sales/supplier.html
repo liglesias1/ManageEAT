@@ -4,10 +4,18 @@
 {% block intro %}
 {{ supplier.phone or "" }}{% if supplier.phone and supplier.email %} · {% endif %}{{ supplier.email or "" }}
 · Delivers in {{ supplier.lead_time_days }} days.
+<a class="link" href="/sales/suppliers/{{ supplier.id }}/edit">Edit details</a> ·
 <a class="link" href="/sales/inventory">← Back to inventory</a>
 {% endblock %}
 
 {% block content %}
+{% if new_ingredient %}
+<p class="notice success">
+  Ingredient “{{ new_ingredient }}” added and linked to {{ supplier.name }}.
+  Record its first delivery below, or <a class="link" href="/sales/dishes#new-dish">use it in a dish →</a>
+</p>
+{% endif %}
+{% if updated %}<p class="notice success">“{{ updated }}” updated.</p>{% endif %}
 <section class="kpis">
   <div class="kpi highlight">
     <div class="label">
@@ -62,7 +70,7 @@
     <tbody>
       {% for item in items %}
       <tr>
-        <td>{{ item.name }}</td>
+        <td>{{ item.name }} <a class="link small" href="/sales/ingredients/{{ item.id }}/edit">Edit</a></td>
         <td class="num">{{ item.unit_cost | eur }} / {{ item.unit }}</td>
         <td class="num">{{ "%.1f" | format(item.used_in_period) }} {{ item.unit }}</td>
         <td class="num">{{ item.spend_in_period | eur }}</td>

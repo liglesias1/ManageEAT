@@ -26,8 +26,8 @@ def add_menu(conn):
     conn.execute("INSERT INTO suppliers VALUES (1, 'Supplier', '600000000', NULL, 2)")
     conn.execute("INSERT INTO ingredients VALUES (1, 'Rice', 'kg', 2.0, 1, 10, '2026-09-01', 2)")
     conn.execute("INSERT INTO ingredients VALUES (2, 'Chicken', 'kg', 5.0, 1, 10, '2026-09-01', 2)")
-    conn.execute("INSERT INTO menu_items VALUES ('PAE01', 'Paella', 'main')")
-    conn.execute("INSERT INTO menu_items VALUES ('RIS01', 'Risotto', 'main')")
+    conn.execute("INSERT INTO menu_items VALUES ('PAE01', 'Paella', 'main', 18)")
+    conn.execute("INSERT INTO menu_items VALUES ('RIS01', 'Risotto', 'main', 16)")
     conn.execute("INSERT INTO recipes VALUES ('PAE01', 1, 0.1)")   # 0.1 kg rice    = 0.20
     conn.execute("INSERT INTO recipes VALUES ('PAE01', 2, 0.2)")   # 0.2 kg chicken = 1.00
     conn.execute("INSERT INTO recipes VALUES ('RIS01', 1, 0.5)")   # 0.5 kg rice    = 1.00

@@ -1,0 +1,68 @@
+{# The dish form, shared by "Add a dish" and "Edit dish". Needs: action, button, form, categories, ingredients, target #}
+<form method="post" action="{{ action }}" class="form dish-form">
+  <div class="dish-fields">
+    <label>Name<input name="name" value="{{ form.name or '' }}" required minlength="2" placeholder="Tiramisu"></label>
+    <label>Type
+      <select name="category" required>
+        <option value="">Choose…</option>
+        {% for c in categories %}
+        <option value="{{ c }}" {{ 'selected' if form.category == c else '' }}>{{ c | capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Price (€)<input name="price" type="number" step="0.01" min="0.01" value="{{ form.price or '' }}" required></label>
+  </div>
+
+  <fieldset class="choices recipe-rows">
+    <legend>Recipe: ingredients for one portion <span class="muted">(leave a row empty to remove it)</span></legend>
+    {% set rows = form.rows or [] %}
+    {% for n in range([8, rows | length + 2] | max) %}
+    {% set row = rows[n] if n < rows | length else ("", "") %}
+    <div class="recipe-row">
+      <select name="ingredient_id">
+        <option value="">–</option>
+        {% for i in ingredients %}
+        <option value="{{ i.id }}" data-cost="{{ i.unit_cost }}" data-unit="{{ i.unit }}" {{ 'selected' if row[0] | string == i.id | string else '' }}>{{ i.name }} ({{ i.unit_cost | eur }}/{{ i.unit }})</option>
+        {% endfor %}
+      </select>
+      <input name="quantity" type="number" step="any" min="0" value="{{ row[1] }}" placeholder="Quantity">
+      <span class="unit muted"></span>
+    </div>
+    {% endfor %}
+  </fieldset>
+
+  <div class="preview">
+    <div><span class="muted">Ingredient cost</span><strong class="preview-cost">€0.00</strong></div>
+    <div><span class="muted">Margin</span><strong class="preview-margin">–</strong></div>
+    <div><span class="muted">Markup</span><strong class="preview-markup">–</strong></div>
+    <div><span class="muted">Food cost</span><strong class="preview-fc">–</strong></div>
+  </div>
+
+  <button type="submit">{{ button }}</button>
+</form>
+
+<script>
+  // Live preview of the cost while the recipe is being written (the server calculates it again when saving)
+  (function () {
+    const form = document.currentScript.previousElementSibling;
+    const euro = (v) => "€" + v.toFixed(2);
+    function preview() {
+      let cost = 0;
+      form.querySelectorAll(".recipe-row").forEach(row => {
+        const option = row.querySelector("select").selectedOptions[0];
+        const quantity = parseFloat(row.querySelector("input").value) || 0;
+        row.querySelector(".unit").textContent = option.dataset.unit || "";
+        cost += (parseFloat(option.dataset.cost) || 0) * quantity;
+      });
+      const price = parseFloat(form.price.value) || 0;
+      form.querySelector(".preview-cost").textContent = euro(cost);
+      form.querySelector(".preview-margin").textContent = price ? euro(price - cost) : "–";
+      form.querySelector(".preview-markup").textContent = price && cost ? "+" + Math.round((price - cost) / cost * 100) + "%" : "–";
+      const fc = form.querySelector(".preview-fc");
+      fc.textContent = price ? (cost / price * 100).toFixed(1) + "%" : "–";
+      fc.classList.toggle("over", price > 0 && cost / price * 100 > {{ target }});
+    }
+    form.addEventListener("input", preview);
+    preview();
+  })();
+</script>

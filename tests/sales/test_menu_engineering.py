@@ -41,10 +41,23 @@ def test_categories_are_compared_separately():
     assert result["WATER"]["class"] == "star"
 
 
-def test_dish_without_sales_is_a_dog_and_does_not_crash():
-    result = by_code(classify_menu([dish("A", 10, 200, 5), dish("NEW", 0, 0, 4)]))
-    assert result["NEW"]["avg_price"] == 0
-    assert result["NEW"]["class"] == "dog"
+def test_dish_without_sales_is_new_and_does_not_change_the_others():
+    alone = by_code(classify_menu([dish("A", 10, 200, 5), dish("B", 30, 300, 5)]))
+    with_new = by_code(classify_menu([dish("A", 10, 200, 5), dish("B", 30, 300, 5), dish("NEW", 0, 0, 4)]))
+    assert with_new["NEW"]["class"] == "new"
+    assert with_new["A"]["class"] == alone["A"]["class"]
+    assert with_new["A"]["popularity_threshold"] == alone["A"]["popularity_threshold"]
+
+
+def test_category_with_only_new_dishes_does_not_crash():
+    result = classify_menu([dish("NEW", 0, 0, 4, category="dessert")])
+    assert result[0]["class"] == "new"
+
+
+def test_new_dishes_are_not_the_least_ordered():
+    summary = menu_summary(classify_menu([dish("A", 10, 200, 5), dish("B", 30, 300, 5), dish("NEW", 0, 0, 4)]))
+    assert summary["least_ordered"] == "A"
+    assert summary["class_counts"]["new"] == 1
 
 
 def test_every_dish_gets_a_recommendation():

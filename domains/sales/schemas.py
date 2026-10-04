@@ -1,6 +1,6 @@
 """Pydantic models for the data entering and leaving the sales domain."""
 from datetime import date
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -59,3 +59,67 @@ class FixedExpenseIn(BaseModel):
     @classmethod
     def strip_description(cls, value):
         return value.strip() if isinstance(value, str) else value
+
+
+class RecipeLineIn(BaseModel):
+    """One ingredient of a recipe and how much of it one portion uses."""
+
+    ingredient_id: int
+    quantity: float = Field(gt=0)
+
+
+class DishIn(BaseModel):
+    """A new dish added from the menu page, with its recipe."""
+
+    name: str = Field(min_length=2, max_length=60)
+    category: Literal["starter", "main", "dessert", "drink"]
+    price: float = Field(gt=0, le=500)
+    recipe: List[RecipeLineIn] = Field(min_length=1)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("recipe")
+    @classmethod
+    def no_repeated_ingredients(cls, recipe):
+        ids = [line.ingredient_id for line in recipe]
+        if len(ids) != len(set(ids)):
+            raise ValueError("each ingredient can only appear once in a recipe")
+        return recipe
+
+
+
+
+class IngredientIn(BaseModel):
+    """A new ingredient added from the inventory page.
+
+    It is bought either from a supplier we already have (supplier_id) or from a new one (new_supplier),
+    never both.
+    """
+
+    name: str = Field(min_length=2, max_length=60)
+    unit: Literal["kg", "l", "unit"]
+    unit_cost: float = Field(gt=0, le=1000)
+    counted_stock: float = Field(ge=0)
+    reorder_level: float = Field(ge=0)
+    counted_at: date
+    supplier_id: Optional[int] = None
+    new_supplier: Optional[SupplierIn] = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("supplier_id", mode="before")
+    @classmethod
+    def blank_supplier_to_none(cls, value):
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def one_supplier(self):
+        if (self.supplier_id is None) == (self.new_supplier is None):
+            raise ValueError("choose an existing supplier or add a new one")
+        return self

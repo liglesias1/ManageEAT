@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ ingredient.name }}{% endblock %}
+{% block heading %}Edit {{ ingredient.name }}{% endblock %}
+{% block intro %}
+Change its price, its supplier or the reorder level, or record a new stock count.
+<a class="link" href="/sales/inventory">← Back to inventory</a>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  {% if errors %}
+  <div class="notice error">
+    {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="/sales/ingredients/{{ ingredient.id }}/edit" class="form">
+    <div class="ingredient-fields">
+      <label>Name<input name="name" value="{{ form.name or '' }}" required minlength="2"></label>
+      <label>Unit
+        <select name="unit">
+          {% for u in ["kg", "l", "unit"] %}
+          <option value="{{ u }}" {{ 'selected' if form.unit == u else '' }}>{{ u }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Price per unit (€)<input name="unit_cost" type="number" step="0.01" min="0.01" value="{{ form.unit_cost }}" required></label>
+      <label>Stock counted<input name="counted_stock" type="number" step="any" min="0" value="{{ form.counted_stock }}" required></label>
+      <label>Counted on<input name="counted_at" type="date" value="{{ form.counted_at or '' }}" required></label>
+      <label>Reorder below<input name="reorder_level" type="number" step="any" min="0" value="{{ form.reorder_level }}" required></label>
+    </div>
+    <label>Supplier
+      <select name="supplier_id" required>
+        {% for s in suppliers %}
+        <option value="{{ s.id }}" {{ 'selected' if form.supplier_id | string == s.id | string else '' }}>{{ s.name }} · delivers in {{ s.lead_time_days }} d</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="muted">
+      A new stock count replaces the old one: current stock is worked out again from this count, the deliveries received
+      and what the recipes used since that day. A new price changes the cost of every dish that uses it.
+      New supplier? <a class="link" href="/sales/inventory#new-supplier">Add it first →</a>
+    </p>
+    <button type="submit">Save changes</button>
+  </form>
+</section>
+{% endblock %}

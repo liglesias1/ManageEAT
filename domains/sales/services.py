@@ -13,6 +13,7 @@ RECOMMENDATIONS = {
     "plowhorse": "Popular but low margin: review its price or ingredient cost.",
     "puzzle": "Profitable but rarely ordered: promote it or reposition it on the menu.",
     "dog": "Low sales and low margin: consider removing it.",
+    "new": "No sales yet: wait until it has been on the menu for a while before judging it.",
 }
 
 
@@ -24,7 +25,14 @@ def classify_menu(dishes):
     """
     result = []
     for category in sorted({dish["category"] for dish in dishes}):
-        group = [dish for dish in dishes if dish["category"] == category]
+        group = [dish for dish in dishes if dish["category"] == category and dish["units_sold"] > 0]
+        # A dish that has never been sold cannot be judged yet, and would lower the category's averages
+        for dish in dishes:
+            if dish["category"] == category and dish["units_sold"] == 0:
+                result.append({**dish, "avg_price": 0.0, "margin": 0.0, "total_margin": 0.0,
+                               "class": "new", "recommendation": RECOMMENDATIONS["new"]})
+        if not group:
+            continue
         total_units = sum(dish["units_sold"] for dish in group)
 
         analysed = []
@@ -38,7 +46,7 @@ def classify_menu(dishes):
         average_margin = sum(d["total_margin"] for d in analysed) / total_units if total_units else 0.0
 
         for dish in analysed:
-            popular = dish["units_sold"] > 0 and dish["units_sold"] >= popularity_threshold
+            popular = dish["units_sold"] >= popularity_threshold
             profitable = dish["margin"] >= average_margin
             if popular and profitable:
                 dish["class"] = "star"
@@ -60,7 +68,7 @@ def menu_summary(dishes):
     revenue = sum(d["revenue"] for d in dishes)
     ingredient_cost = sum(d["unit_cost"] * d["units_sold"] for d in dishes)
     # Drinks always sell the most units, so best/least ordered only look at food
-    food = [d for d in dishes if d["category"] != "drink"]
+    food = [d for d in dishes if d["category"] != "drink" and d["class"] != "new"]
     return {
         "revenue": revenue,
         "ingredient_cost": ingredient_cost,
@@ -70,6 +78,62 @@ def menu_summary(dishes):
         "least_ordered": min(food, key=lambda d: d["units_sold"])["name"] if food else None,
         "class_counts": {c: sum(1 for d in dishes if d["class"] == c) for c in RECOMMENDATIONS},
     }
+
+
+# ---------- Dishes and recipes ----------
+
+# Food cost a restaurant usually aims for: ingredients should be at most 35% of the menu price
+FOOD_COST_TARGET = 35
+
+
+def cost_dishes(dishes, recipe_lines):
+    """Adds the recipe, ingredient cost, margin, markup and food cost % to each dish on the menu.
+
+    `dishes` is a list of dicts with: code, name, category, price.
+    `recipe_lines` is a list of dicts with: item_code, ingredient, unit, quantity, unit_cost.
+    Markup = how much the price is above the cost; food cost % = how much of the price goes on ingredients.
+    """
+    result = []
+    for dish in dishes:
+        recipe = [
+            {**line, "line_cost": line["quantity"] * line["unit_cost"]}
+            for line in recipe_lines
+            if line["item_code"] == dish["code"]
+        ]
+        cost = sum(line["line_cost"] for line in recipe)
+        food_cost_pct = cost / dish["price"] * 100
+        result.append({
+            **dish,
+            "recipe": sorted(recipe, key=lambda line: line["line_cost"], reverse=True),
+            "cost": cost,
+            "margin": dish["price"] - cost,
+            "markup_pct": (dish["price"] - cost) / cost * 100 if cost else None,
+            "food_cost_pct": food_cost_pct,
+            "above_target": food_cost_pct > FOOD_COST_TARGET,
+        })
+    return result
+
+
+def dishes_summary(costed):
+    """Key figures for the menu page, from the output of cost_dishes."""
+    if not costed:
+        return {"dishes": 0, "avg_food_cost_pct": 0.0, "above_target": 0, "highest": None}
+    highest = max(costed, key=lambda d: d["food_cost_pct"])
+    return {
+        "dishes": len(costed),
+        "avg_food_cost_pct": sum(d["food_cost_pct"] for d in costed) / len(costed),
+        "above_target": sum(1 for d in costed if d["above_target"]),
+        "highest": highest,
+    }
+
+
+def new_dish_code(name, existing_codes):
+    """A POS-style code for a new dish: first three letters of its name and a number, e.g. Tiramisu -> TIR01."""
+    letters = "".join(c for c in name.upper() if "A" <= c <= "Z")[:3].ljust(3, "X")
+    number = 1
+    while f"{letters}{number:02d}" in existing_codes:
+        number += 1
+    return f"{letters}{number:02d}"
 
 
 # ---------- Inventory ----------

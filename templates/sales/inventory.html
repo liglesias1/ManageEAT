@@ -64,7 +64,7 @@ and what to order before it runs out. Figures as of {{ as_of or "–" }}.
     <tbody>
       {% for item in stock %}
       <tr>
-        <td>{{ item.name }}</td>
+        <td>{{ item.name }} <a class="link small" href="/sales/ingredients/{{ item.id }}/edit">Edit</a></td>
         <td><a class="link" href="/sales/suppliers/{{ item.supplier_id }}">{{ item.supplier }}</a></td>
         <td class="num">{{ "%.1f" | format(item.current if item.current > 0 else 0) }} {{ item.unit }}</td>
         <td class="num">{{ "%.1f" | format(item.daily_use) }}</td>
@@ -81,6 +81,76 @@ and what to order before it runs out. Figures as of {{ as_of or "–" }}.
     </tbody>
   </table>
 </section>
+
+<section class="card" id="new-ingredient">
+  <h2>Add an ingredient</h2>
+  <p class="hint">A new product the kitchen buys, how much there is now and who sells it. It can then be used in recipes.</p>
+
+  {% if ingredient_errors %}
+  <div class="notice error">
+    {% for message in ingredient_errors %}<div>{{ message }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% set f = ingredient_form %}
+  <form method="post" action="/sales/inventory/ingredients#new-ingredient" class="form ingredient-form">
+    <div class="ingredient-fields">
+      <label>Name<input name="name" value="{{ f.name or '' }}" required minlength="2" placeholder="Mascarpone"></label>
+      <label>Unit
+        <select name="unit">
+          {% for u in ["kg", "l", "unit"] %}
+          <option value="{{ u }}" {{ 'selected' if f.unit == u else '' }}>{{ u }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Price per unit (€)<input name="unit_cost" type="number" step="0.01" min="0.01" value="{{ f.unit_cost or '' }}" required></label>
+      <label>Stock now<input name="counted_stock" type="number" step="any" min="0" value="{{ f.counted_stock or '' }}" required></label>
+      <label>Reorder below<input name="reorder_level" type="number" step="any" min="0" value="{{ f.reorder_level or '' }}" required></label>
+      <label>Counted on<input name="counted_at" type="date" value="{{ f.counted_at or '' }}" required></label>
+    </div>
+
+    <fieldset class="choices supplier-choice">
+      <legend>Who sells it?</legend>
+      <div class="segmented">
+        <label class="choice"><input type="radio" name="supplier_choice" value="existing" {{ 'checked' if f.supplier_choice != 'new' else '' }}> A supplier we already have</label>
+        <label class="choice"><input type="radio" name="supplier_choice" value="new" {{ 'checked' if f.supplier_choice == 'new' else '' }}> A new supplier</label>
+      </div>
+
+      <div class="supplier-panel" data-choice="existing">
+        <label>Supplier
+          <select name="supplier_id">
+            <option value="">Choose…</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}" {{ 'selected' if f.supplier_id == s.id | string else '' }}>{{ s.name }} · delivers in {{ s.lead_time_days }} d</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <div class="supplier-panel new-supplier-fields" data-choice="new">
+        <label>Supplier name<input name="new_supplier_name" value="{{ f.new_supplier_name or '' }}" placeholder="Quesos Italia"></label>
+        <label>Phone<input name="new_supplier_phone" value="{{ f.new_supplier_phone or '' }}" placeholder="+34 600 000 000"></label>
+        <label>Email<input name="new_supplier_email" type="email" value="{{ f.new_supplier_email or '' }}" placeholder="orders@supplier.com"></label>
+        <label>Delivery time (days)<input name="new_supplier_lead_time" type="number" min="0" max="60" value="{{ f.new_supplier_lead_time or '' }}"></label>
+      </div>
+    </fieldset>
+
+    <button type="submit">Add ingredient</button>
+  </form>
+</section>
+
+<script>
+  // Shows the fields for an existing supplier or for a new one, depending on the choice
+  const ingredientForm = document.querySelector(".ingredient-form");
+  function showSupplierChoice() {
+    const choice = ingredientForm.querySelector("input[name=supplier_choice]:checked").value;
+    ingredientForm.querySelectorAll(".supplier-panel").forEach(panel => {
+      panel.hidden = panel.dataset.choice !== choice;
+    });
+  }
+  ingredientForm.querySelectorAll("input[name=supplier_choice]").forEach(r => r.addEventListener("change", showSupplierChoice));
+  showSupplierChoice();
+</script>
 
 <div class="split">
   <section class="card" id="new-supplier">
