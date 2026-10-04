@@ -24,13 +24,14 @@ CREATE TABLE IF NOT EXISTS ingredients (
 CREATE TABLE IF NOT EXISTS menu_items (
     code      TEXT PRIMARY KEY,
     name      TEXT NOT NULL,
-    category  TEXT NOT NULL CHECK (category IN ('starter', 'main', 'dessert', 'drink'))
+    category  TEXT NOT NULL CHECK (category IN ('starter', 'main', 'dessert', 'drink')),
+    price     REAL NOT NULL CHECK (price > 0)
 );
 
 CREATE TABLE IF NOT EXISTS recipes (
     item_code      TEXT    NOT NULL REFERENCES menu_items(code),
     ingredient_id  INTEGER NOT NULL REFERENCES ingredients(id),
-    quantity       REAL    NOT NULL,
+    quantity       REAL    NOT NULL CHECK (quantity > 0),
     PRIMARY KEY (item_code, ingredient_id)
 );
 

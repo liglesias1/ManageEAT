@@ -1,6 +1,6 @@
 """Pydantic models for the data entering and leaving the sales domain."""
 from datetime import date
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -59,3 +59,32 @@ class FixedExpenseIn(BaseModel):
     @classmethod
     def strip_description(cls, value):
         return value.strip() if isinstance(value, str) else value
+
+
+class RecipeLineIn(BaseModel):
+    """One ingredient of a recipe and how much of it one portion uses."""
+
+    ingredient_id: int
+    quantity: float = Field(gt=0)
+
+
+class DishIn(BaseModel):
+    """A new dish added from the menu page, with its recipe."""
+
+    name: str = Field(min_length=2, max_length=60)
+    category: Literal["starter", "main", "dessert", "drink"]
+    price: float = Field(gt=0, le=500)
+    recipe: List[RecipeLineIn] = Field(min_length=1)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("recipe")
+    @classmethod
+    def no_repeated_ingredients(cls, recipe):
+        ids = [line.ingredient_id for line in recipe]
+        if len(ids) != len(set(ids)):
+            raise ValueError("each ingredient can only appear once in a recipe")
+        return recipe

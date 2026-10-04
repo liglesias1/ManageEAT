@@ -34,21 +34,21 @@ INGREDIENTS = [
     (18, "Beer bottle", "unit", 0.70, 5, 1020, STOCKTAKE_DATE, 120),
 ]
 
-# code, name, category (codes match the ones used by the POS)
+# code, name, category, current menu price in EUR (codes match the ones used by the POS)
 MENU_ITEMS = [
-    ("SAL01", "Mixed salad", "starter"),
-    ("CRO01", "Chicken croquettes", "starter"),
-    ("GAZ01", "Gazpacho", "starter"),
-    ("PAE01", "Valencian paella", "main"),
-    ("SOL01", "Beef tenderloin", "main"),
-    ("ENT01", "Ribeye steak", "main"),
-    ("HAM01", "Burger", "main"),
-    ("RIS01", "Parmesan risotto", "main"),
-    ("TAR01", "Cheesecake", "dessert"),
-    ("FLA01", "Flan", "dessert"),
-    ("AGU01", "Water", "drink"),
-    ("VIN01", "Glass of wine", "drink"),
-    ("CER01", "Beer", "drink"),
+    ("SAL01", "Mixed salad", "starter", 9.50),
+    ("CRO01", "Chicken croquettes", "starter", 8.00),
+    ("GAZ01", "Gazpacho", "starter", 7.50),
+    ("PAE01", "Valencian paella", "main", 18.00),
+    ("SOL01", "Beef tenderloin", "main", 21.00),
+    ("ENT01", "Ribeye steak", "main", 24.00),
+    ("HAM01", "Burger", "main", 14.50),
+    ("RIS01", "Parmesan risotto", "main", 16.00),
+    ("TAR01", "Cheesecake", "dessert", 6.50),
+    ("FLA01", "Flan", "dessert", 5.00),
+    ("AGU01", "Water", "drink", 2.50),
+    ("VIN01", "Glass of wine", "drink", 4.00),
+    ("CER01", "Beer", "drink", 3.50),
 ]
 
 # item_code, ingredient_id, quantity per portion (in the ingredient's unit)
@@ -86,7 +86,7 @@ def seed_sales_if_empty(conn):
         return
     conn.executemany("INSERT INTO suppliers VALUES (?, ?, ?, ?, ?)", SUPPLIERS)
     conn.executemany("INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?)", INGREDIENTS)
-    conn.executemany("INSERT INTO menu_items VALUES (?, ?, ?)", MENU_ITEMS)
+    conn.executemany("INSERT INTO menu_items VALUES (?, ?, ?, ?)", MENU_ITEMS)
     conn.executemany("INSERT INTO recipes VALUES (?, ?, ?)", RECIPES)
     conn.executemany(
         "INSERT INTO purchases (supplier_id, ingredient_id, quantity, unit_price, received_on) VALUES (?, ?, ?, ?, ?)",
