@@ -34,3 +34,11 @@ Context: The value of ManageEAT is in its calculations (menu classes, stock, sta
 Decision: Services are tested as pure functions with small hand-made inputs, repositories against a fresh in-memory SQLite database per test, and pages and forms end to end with FastAPI's TestClient on a temporary data folder, plus one architecture test that enforces the boundary of ADR-2. Coverage is measured on domains/ and overview.py with pytest-cov.
 Alternatives considered: Testing only through the pages was rejected because, when a number is wrong, the test cannot show whether the SQL or the calculation failed. Mocking the database was rejected because in-memory SQLite is just as fast and tests the real queries.
 Consequences: Left thinner on purpose: the JavaScript in the templates (charts, tabs, live cost preview) has no automated tests because it only draws numbers the server has already calculated and tested, and the demo data generators are only checked through the page tests. Page tests rely on the fixed-seed demo data, so changing the seed changes some expected values, which is intended.
+
+## 5. Not built: restaurant accounts (register a restaurant and log in)
+Date: 2026-10-04
+Status: Decided
+Context: A natural next step is to let any restaurant register, log in and see only its own data, but the current version serves one restaurant whose orders and clock-ins come from its own systems.
+Decision: The app has no registration, login or users, and holds the data of a single restaurant.
+Alternatives considered: Restaurant accounts were considered, but every table would need a restaurant_id column and every query a filter on it, where one missed filter would show a restaurant another's data, and a newly registered restaurant would see empty pages until its POS and clock-in data were connected. A simpler login with several users of the same restaurant was also rejected because, in a single-user local deployment, it protects nothing extra.
+Consequences: Anyone who can reach the app can see and change everything, so accounts must be added before it is exposed publicly in the Azure deployment of Assignment 2. Keeping restaurant data in tables owned by each domain means a restaurant_id can later be added domain by domain without changing the seam between them.
