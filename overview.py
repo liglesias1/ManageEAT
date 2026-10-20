@@ -3,6 +3,8 @@
 This module is not a domain. It sits on top of both and only calls their public functions,
 so the rule of ADR-2 (sales and personnel stay separable) still holds.
 """
+from datetime import date
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
@@ -20,11 +22,13 @@ def _sales_figures(conn):
     dishes = sales.classify_menu(sales_repo.get_dish_sales(conn))
     as_of = sales_repo.get_last_order_day(conn)
     stock = sales.stock_status(sales_repo.get_stock_levels(conn), as_of)
-    start, end = sales_repo.get_sales_period(conn)
-    month = start[:7] if start else None
+    # Same month as the profit and loss page shows by default
+    current = date.today().strftime("%Y-%m")
+    month = sales.choose_month(sales_repo.get_months(conn), None, as_of[:7] if as_of else None, current)
+    start, end = sales_repo.get_sales_period_in_month(conn, month)
     statement = sales.profit_and_loss(
         sales_repo.get_daily_sales(conn, start, end) if start else [],
-        sales_repo.get_fixed_expenses(conn, month) if month else [],
+        sales_repo.get_fixed_expenses(conn, month),
         lambda a, b: personnel.labor_cost(conn, a, b),
         start,
         end,

@@ -7,8 +7,9 @@ templates = Jinja2Templates(directory=str(config.BASE_DIR / "templates"))
 
 
 def eur(value):
-    """Formats a number as euros, e.g. 1234.5 -> €1,234.50"""
-    return f"€{value:,.2f}"
+    """Formats a number as euros, e.g. 1234.5 -> €1,234.50 and -3200 -> -€3,200.00"""
+    sign = "-" if value < 0 else ""
+    return f"{sign}€{abs(value):,.2f}"
 
 
 templates.env.filters["eur"] = eur

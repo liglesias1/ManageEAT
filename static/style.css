@@ -250,3 +250,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 details .link.small { display: inline-block; margin: 0 0 6px 16px; }
 .card.narrow { max-width: 560px; }
 .ingredient-fields input, .ingredient-fields select, .dish-fields input, .dish-fields select { width: 100%; min-width: 0; }
+
+
+/* Month navigation on the profit and loss page: previous/next arrows, any month, and the history table */
+.month-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 18px; }
+.month-nav .month-picker { margin: 0; }
+.month-picker input { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }
+.month-step { color: var(--accent); font-weight: 600; font-size: 14px; text-decoration: none; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.month-step:hover { border-color: var(--accent); }
+.empty-month { margin-bottom: 22px; }
+tr.selected td { background: var(--bg); font-weight: 600; }

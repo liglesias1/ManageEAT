@@ -2,6 +2,7 @@
 
 import calendar
 import math
+import re
 from datetime import date, timedelta
 
 # Kasavana & Smith menu engineering: a dish is "popular" if it sells at least
@@ -257,3 +258,48 @@ def profit_and_loss(daily_sales, fixed_expenses, labor_cost_for, start, end):
         "net_margin_pct": share(net_profit),
         "weeks": weeks,
     }
+
+
+# ---------- Months ----------
+
+MONTH_FORMAT = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")   # 'YYYY-MM', the format of <input type="month">
+
+
+def choose_month(months, requested, latest_sales_month, current_month):
+    """The month the profit and loss statement shows, as 'YYYY-MM'.
+
+    Any well-formed month can be asked for, even one without data, so the manager can move
+    freely between months. Otherwise: the current month if it already has data, else the last
+    month with sales, else the last month with any data, else the current month.
+    """
+    if requested and MONTH_FORMAT.match(requested):
+        return requested
+    if current_month in months:
+        return current_month
+    if latest_sales_month:
+        return latest_sales_month
+    return months[-1] if months else current_month
+
+
+def shift_month(month, delta):
+    """The month `delta` months before or after, e.g. ('2026-01', -1) -> '2025-12'."""
+    index = int(month[:4]) * 12 + int(month[5:7]) - 1 + delta
+    return f"{index // 12:04d}-{index % 12 + 1:02d}"
+
+
+def month_history(daily_sales, fixed_expenses, labor_cost_for, months):
+    """A profit and loss summary for each month with data, newest first.
+
+    Every month follows the same rules as the monthly statement (its period runs from its first
+    to its last day with sales), so each row always matches that month's statement.
+    """
+    history = []
+    for month in sorted(months, reverse=True):
+        days = [d for d in daily_sales if d["day"].startswith(month)]
+        expenses = [e for e in fixed_expenses if e["month"] == month]
+        start = min(d["day"] for d in days) if days else None
+        end = max(d["day"] for d in days) if days else None
+        statement = profit_and_loss(days, expenses, labor_cost_for, start, end)
+        history.append({"month": month, **{key: statement[key] for key in (
+            "revenue", "ingredients", "labor", "fixed", "net_profit", "net_margin_pct")}})
+    return history

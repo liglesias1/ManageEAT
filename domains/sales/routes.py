@@ -1,5 +1,7 @@
 """Web pages of the sales domain."""
+from datetime import date
 from typing import List
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,13 +14,16 @@ from domains.sales.repository import get_dish_sales
 from domains.sales.schemas import DishIn, FixedExpenseIn, IngredientIn, PurchaseIn, SupplierIn
 from domains.sales.services import (
     FOOD_COST_TARGET,
+    choose_month,
     classify_menu,
     cost_dishes,
     dishes_summary,
     inventory_summary,
     menu_summary,
+    month_history,
     new_dish_code,
     profit_and_loss,
+    shift_month,
     stock_status,
     supplier_summary,
 )
@@ -514,18 +519,28 @@ def record_purchase(
     return RedirectResponse(url=f"/sales/suppliers/{supplier_id}?added=true", status_code=303)
 
 
-def _profit_loss_page(request, errors=None, form=None, added=None, status_code=200):
+def _profit_loss_page(request, month=None, errors=None, form=None, added=None, status_code=200):
+    current = date.today().strftime("%Y-%m")    # the only place that reads today's date, so the logic stays testable
     conn = get_connection()
     try:
-        start, end = repository.get_sales_period(conn)
-        month = start[:7] if start else None
+        months = repository.get_months(conn)
+        last_day = repository.get_last_order_day(conn)
+        month = choose_month(months, month, last_day[:7] if last_day else None, current)
+        start, end = repository.get_sales_period_in_month(conn, month)
         daily = repository.get_daily_sales(conn, start, end) if start else []
-        expenses = repository.get_fixed_expenses(conn, month) if month else []
+        expenses = repository.get_fixed_expenses(conn, month)
         # Wages come from the personnel domain through one function: this is the seam between the two
-        statement = profit_and_loss(daily, expenses, lambda a, b: labor_cost(conn, a, b), start, end)
+        def wages(start_day, end_day):
+            return labor_cost(conn, start_day, end_day)
+
+        statement = profit_and_loss(daily, expenses, wages, start, end)
+        first, last = repository.get_sales_period(conn)
+        history = month_history(repository.get_daily_sales(conn, first, last) if first else [],
+                                repository.get_all_fixed_expenses(conn), wages, months)
     finally:
         conn.close()
 
+    latest = max(months + [current])            # no "next" arrow past the current month or the last month with data
     return templates.TemplateResponse(
         request,
         "sales/profit_loss.html",
@@ -533,6 +548,11 @@ def _profit_loss_page(request, errors=None, form=None, added=None, status_code=2
             "start": start,
             "end": end,
             "month": month,
+            "has_data": bool(daily or expenses),
+            "in_progress": month == current,
+            "prev_month": shift_month(month, -1),
+            "next_month": shift_month(month, 1) if month < latest else None,
+            "history": history,
             "pl": statement,
             "expenses": expenses,
             "errors": errors or [],
@@ -544,8 +564,8 @@ def _profit_loss_page(request, errors=None, form=None, added=None, status_code=2
 
 
 @router.get("/profit-loss", response_class=HTMLResponse)
-def profit_loss_page(request: Request, added: str = None):
-    return _profit_loss_page(request, added=added)
+def profit_loss_page(request: Request, month: str = None, added: str = None):
+    return _profit_loss_page(request, month=month, added=added)
 
 
 @router.post("/profit-loss/expenses", response_class=HTMLResponse)
@@ -560,11 +580,13 @@ def create_fixed_expense(
         expense = FixedExpenseIn(**form)
     except ValidationError as error:
         messages = [f"{e['loc'][0].capitalize()}: {e['msg'].lower()}" for e in error.errors()]
-        return _profit_loss_page(request, errors=messages, form=form, status_code=422)
+        return _profit_loss_page(request, month=month, errors=messages, form=form, status_code=422)
 
     conn = get_connection()
     try:
         repository.add_fixed_expense(conn, expense.description, expense.amount, expense.month)
     finally:
         conn.close()
-    return RedirectResponse(url=f"/sales/profit-loss?added={expense.description}", status_code=303)
+    # Show the month the expense belongs to, which may not be the one that was on screen
+    query = urlencode({"month": expense.month, "added": expense.description})
+    return RedirectResponse(url=f"/sales/profit-loss?{query}", status_code=303)

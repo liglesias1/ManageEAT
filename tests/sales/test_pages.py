@@ -205,3 +205,44 @@ def test_ingredient_with_invalid_price_or_no_supplier_is_rejected(client):
     no_supplier = client.post("/sales/inventory/ingredients", data={**NEW_INGREDIENT, "supplier_id": ""})
     assert no_supplier.status_code == 422
     assert "choose an existing supplier or add a new one" in no_supplier.text
+
+
+# ---------- Profit and loss: months and history ----------
+# These tests use months other than the real current one, so they pass whatever today's date is.
+
+def test_expense_for_another_month_is_shown_in_that_month(client):
+    response = client.post(
+        "/sales/profit-loss/expenses",
+        data={"description": "Summer rent", "amount": "3200", "month": "2026-08"},
+        follow_redirects=False,
+    )
+    assert response.headers["location"] == "/sales/profit-loss?month=2026-08&added=Summer+rent"
+    page = client.get(response.headers["location"]).text
+    assert "Statement for 2026-08" in page
+    assert "Summer rent</td>" in page
+
+
+def test_profit_loss_opens_on_the_last_month_with_sales(client):
+    page = client.get("/sales/profit-loss").text          # the demo data only has sales in 2026-09
+    assert "Statement for 2026-09" in page
+    assert "€82,495.55" in page
+
+
+def test_month_without_data_says_so_and_can_be_navigated(client):
+    page = client.get("/sales/profit-loss?month=2026-07").text
+    assert "No data recorded for 2026-07" in page
+    assert 'href="/sales/profit-loss?month=2026-06"' in page            # previous month
+    assert 'href="/sales/profit-loss?month=2026-08"' in page            # next month
+
+
+def test_malformed_month_falls_back_to_the_default(client):
+    assert "Statement for 2026-09" in client.get("/sales/profit-loss?month=banana").text
+
+
+def test_history_lists_every_month_with_data(client):
+    client.post("/sales/profit-loss/expenses", data={"description": "Summer rent", "amount": "3200", "month": "2026-08"})
+    page = client.get("/sales/profit-loss?month=2026-09").text
+    assert "Month by month" in page
+    assert '<a class="link" href="/sales/profit-loss?month=2026-08">' in page
+    assert '<a class="link" href="/sales/profit-loss?month=2026-09">' in page
+    assert page.count("€82,495.55") >= 3      # the statement, its KPI card and September's row in the history
