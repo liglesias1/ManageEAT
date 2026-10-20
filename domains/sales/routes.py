@@ -290,6 +290,8 @@ def create_ingredient(
             problem = "Supplier: choose one of the suppliers in the list"
         elif ingredient.name.lower() in {i["name"].lower() for i in repository.get_ingredient_choices(conn)}:
             problem = "Name: there is already an ingredient with that name"
+        elif ingredient.new_supplier and _supplier_name_taken(conn, ingredient.new_supplier.name):
+            problem = "New supplier name: that supplier already exists, choose it from the list"
         else:
             new = ingredient.new_supplier
             saved_supplier = repository.add_ingredient(
@@ -314,24 +316,40 @@ def create_supplier(
     phone: str = Form(""),
     email: str = Form(""),
     lead_time_days: str = Form(""),
-    ingredient_ids: List[int] = Form([]),
+    ingredient_ids: List[str] = Form([]),   # read as text, so a bad value gets a message instead of a JSON error
 ):
     form = {"name": name, "phone": phone, "email": email, "lead_time_days": lead_time_days,
-            "ingredient_ids": ingredient_ids}
+            # the ticked boxes are shown again if the form has errors
+            "ingredient_ids": [int(i) for i in ingredient_ids if i.isdigit()]}
     try:
-        supplier = SupplierIn(**form)
+        supplier = SupplierIn(**{**form, "ingredient_ids": ingredient_ids})
     except ValidationError as error:
         messages = [e["msg"].replace("Value error, ", "").capitalize() for e in error.errors()]
         return _inventory_page(request, errors=messages, form=form, status_code=422)
 
     conn = get_connection()
     try:
-        repository.add_supplier(
-            conn, supplier.name, supplier.phone, supplier.email, supplier.lead_time_days, supplier.ingredient_ids
-        )
+        problem = None
+        known = {i["id"] for i in repository.get_ingredient_choices(conn)}
+        if _supplier_name_taken(conn, supplier.name):
+            problem = "Name: there is already a supplier with that name"
+        elif any(i not in known for i in supplier.ingredient_ids):
+            problem = "Ingredients: choose ingredients from the list"
+        else:
+            repository.add_supplier(
+                conn, supplier.name, supplier.phone, supplier.email, supplier.lead_time_days, supplier.ingredient_ids
+            )
     finally:
         conn.close()
+
+    if problem:
+        return _inventory_page(request, errors=[problem], form=form, status_code=422)
     return _redirect("/sales/inventory", added=supplier.name)
+
+
+def _supplier_name_taken(conn, name, except_id=None):
+    """True if another supplier already has this name, ignoring upper and lower case."""
+    return any(s["name"].lower() == name.lower() and s["id"] != except_id for s in repository.get_suppliers(conn))
 
 
 def _error_messages(error):
@@ -449,10 +467,16 @@ def update_supplier(
     try:
         if repository.get_supplier(conn, supplier_id) is None:
             raise HTTPException(status_code=404, detail="Supplier not found")
-        repository.update_supplier(conn, supplier_id, supplier.name, supplier.phone, supplier.email,
-                                   supplier.lead_time_days)
+        taken = _supplier_name_taken(conn, supplier.name, except_id=supplier_id)
+        if not taken:
+            repository.update_supplier(conn, supplier_id, supplier.name, supplier.phone, supplier.email,
+                                       supplier.lead_time_days)
     finally:
         conn.close()
+
+    if taken:
+        return _supplier_edit_page(request, supplier_id, errors=["Name: there is already a supplier with that name"],
+                                   form=form, status_code=422)
     return _redirect(f"/sales/suppliers/{supplier_id}", updated=supplier.name)
 
 
