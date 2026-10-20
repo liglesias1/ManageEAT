@@ -284,3 +284,56 @@ def test_expense_name_with_an_ampersand_is_shown_whole(client):
         follow_redirects=False,
     )
     assert "Expense “Gas &amp; water” added." in client.get(response.headers["location"]).text
+
+
+
+# ---------- Wrong input gets a message on the page, never a crash or a silent save ----------
+
+def test_supplier_with_a_non_numeric_ingredient_gets_a_message_not_a_json_error(client):
+    response = client.post(
+        "/sales/inventory/suppliers",
+        data={"name": "Bodegas Rioja", "phone": "600000000", "email": "", "lead_time_days": "2",
+              "ingredient_ids": ["abc"]},
+    )
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("text/html")
+    assert "valid integer" in response.text
+
+
+def test_supplier_with_an_unknown_ingredient_is_not_saved(client):
+    response = client.post(
+        "/sales/inventory/suppliers",
+        data={"name": "Bodegas Rioja", "phone": "600000000", "email": "", "lead_time_days": "2",
+              "ingredient_ids": ["9999"]},
+    )
+    assert response.status_code == 422
+    assert "choose ingredients from the list" in response.text
+    assert "Bodegas Rioja</td>" not in client.get("/sales/inventory").text
+
+
+def test_supplier_name_already_in_use_is_rejected_whatever_the_case(client):
+    response = client.post(
+        "/sales/inventory/suppliers",
+        data={"name": "carnes martín", "phone": "600000000", "email": "", "lead_time_days": "2"},
+    )
+    assert response.status_code == 422
+    assert "already a supplier with that name" in response.text
+
+
+def test_renaming_a_supplier_to_another_suppliers_name_is_rejected(client):
+    taken = client.post("/sales/suppliers/2/edit",              # Carnes Martín -> Huerta de Madrid
+                        data={"name": "Huerta de Madrid", "phone": "600000000", "email": "", "lead_time_days": "2"})
+    assert taken.status_code == 422
+    assert "already a supplier with that name" in taken.text
+    same = client.post("/sales/suppliers/2/edit",               # keeping its own name is fine
+                       data={"name": "Carnes Martín", "phone": "600000000", "email": "", "lead_time_days": "3"},
+                       follow_redirects=False)
+    assert same.status_code == 303
+
+
+def test_new_ingredient_cannot_create_a_supplier_that_already_exists(client):
+    data = {**NEW_INGREDIENT, "supplier_choice": "new", "supplier_id": "", "new_supplier_name": "Lácteos Sierra",
+            "new_supplier_phone": "600000000", "new_supplier_lead_time": "2"}
+    response = client.post("/sales/inventory/ingredients", data=data)
+    assert response.status_code == 422
+    assert "that supplier already exists" in response.text

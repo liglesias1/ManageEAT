@@ -50,4 +50,9 @@ CREATE TABLE IF NOT EXISTS fixed_expenses (
     amount       REAL NOT NULL CHECK (amount > 0),
     month        TEXT NOT NULL
 );
+
+-- Supplier and ingredient names are unique regardless of case ("Chicken" and "chicken" are the same).
+-- Written as indexes rather than column constraints so they are also added to existing databases.
+CREATE UNIQUE INDEX IF NOT EXISTS suppliers_name_unique ON suppliers (name COLLATE NOCASE);
+CREATE UNIQUE INDEX IF NOT EXISTS ingredients_name_unique ON ingredients (name COLLATE NOCASE);
 """

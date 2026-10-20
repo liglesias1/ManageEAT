@@ -169,3 +169,12 @@ def test_sales_period_in_month_only_looks_at_that_month(conn):
     assert get_sales_period_in_month(conn, "2026-09") == ("2026-09-01", "2026-09-01")
     assert get_sales_period_in_month(conn, "2026-10") == ("2026-10-05", "2026-10-05")
     assert get_sales_period_in_month(conn, "2026-11") == (None, None)
+
+
+
+def test_database_rejects_repeated_names_whatever_the_case(conn):
+    add_menu(conn)                                           # supplier "Supplier", ingredients Rice and Chicken
+    with pytest.raises(sqlite3.IntegrityError):
+        add_supplier(conn, "SUPPLIER", "600", None, 2)
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO ingredients VALUES (3, 'rice', 'kg', 2.0, 1, 10, '2026-09-01', 2)")
