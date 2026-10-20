@@ -34,6 +34,15 @@ router = APIRouter(prefix="/sales", tags=["sales"])
 CATEGORY_ORDER = ["main", "starter", "dessert", "drink"]
 
 
+def _redirect(path, **params):
+    """Post/Redirect/Get: send the browser to `path` with an encoded query string.
+
+    Encoding matters for names typed by the user: 'Gas & water' would otherwise be cut at the '&'.
+    Reloading the page after the redirect does not submit the form twice.
+    """
+    return RedirectResponse(url=f"{path}?{urlencode(params)}", status_code=303)
+
+
 @router.get("/menu", response_class=HTMLResponse)
 def menu_page(request: Request):
     conn = get_connection()
@@ -141,7 +150,7 @@ def create_dish(
                             [(line.ingredient_id, line.quantity) for line in dish.recipe])
     finally:
         conn.close()
-    return RedirectResponse(url=f"/sales/dishes?added={dish.name}", status_code=303)
+    return _redirect("/sales/dishes", added=dish.name)
 
 
 def _dish_edit_page(request, code, errors=None, form=None, status_code=200):
@@ -199,7 +208,7 @@ def update_dish(
                                [(line.ingredient_id, line.quantity) for line in dish.recipe])
     finally:
         conn.close()
-    return RedirectResponse(url=f"/sales/dishes?updated={dish.name}", status_code=303)
+    return _redirect("/sales/dishes", updated=dish.name)
 
 
 def _inventory_page(request, errors=None, form=None, added=None, status_code=200,
@@ -295,8 +304,7 @@ def create_ingredient(
     if problem:
         return _inventory_page(request, ingredient_errors=[problem], ingredient_form=form, status_code=422)
     # The supplier's page now lists the new product, ready to record its first delivery
-    return RedirectResponse(url=f"/sales/suppliers/{saved_supplier}?new_ingredient={ingredient.name}",
-                            status_code=303)
+    return _redirect(f"/sales/suppliers/{saved_supplier}", new_ingredient=ingredient.name)
 
 
 @router.post("/inventory/suppliers", response_class=HTMLResponse)
@@ -323,8 +331,7 @@ def create_supplier(
         )
     finally:
         conn.close()
-    # Post/Redirect/Get: reloading the page after saving does not submit the form twice
-    return RedirectResponse(url=f"/sales/inventory?added={supplier.name}", status_code=303)
+    return _redirect("/sales/inventory", added=supplier.name)
 
 
 def _error_messages(error):
@@ -399,8 +406,7 @@ def update_ingredient(
 
     if problem:
         return _ingredient_edit_page(request, ingredient_id, errors=[problem], form=form, status_code=422)
-    return RedirectResponse(url=f"/sales/suppliers/{ingredient.supplier_id}?updated={ingredient.name}",
-                            status_code=303)
+    return _redirect(f"/sales/suppliers/{ingredient.supplier_id}", updated=ingredient.name)
 
 
 def _supplier_edit_page(request, supplier_id, errors=None, form=None, status_code=200):
@@ -447,7 +453,7 @@ def update_supplier(
                                    supplier.lead_time_days)
     finally:
         conn.close()
-    return RedirectResponse(url=f"/sales/suppliers/{supplier_id}?updated={supplier.name}", status_code=303)
+    return _redirect(f"/sales/suppliers/{supplier_id}", updated=supplier.name)
 
 
 def _supplier_page(request, supplier_id, errors=None, form=None, added=False, status_code=200,
@@ -516,7 +522,7 @@ def record_purchase(
     if purchase.ingredient_id not in sold_here:
         return _supplier_page(request, supplier_id, errors=["This supplier does not sell that product"],
                               form=form, status_code=422)
-    return RedirectResponse(url=f"/sales/suppliers/{supplier_id}?added=true", status_code=303)
+    return _redirect(f"/sales/suppliers/{supplier_id}", added="true")
 
 
 def _profit_loss_page(request, month=None, errors=None, form=None, added=None, status_code=200):
@@ -588,5 +594,4 @@ def create_fixed_expense(
     finally:
         conn.close()
     # Show the month the expense belongs to, which may not be the one that was on screen
-    query = urlencode({"month": expense.month, "added": expense.description})
-    return RedirectResponse(url=f"/sales/profit-loss?{query}", status_code=303)
+    return _redirect("/sales/profit-loss", month=expense.month, added=expense.description)
