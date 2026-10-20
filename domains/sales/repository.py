@@ -303,3 +303,33 @@ def update_supplier(conn, supplier_id, name, phone, email, lead_time_days):
         (name, phone, email, lead_time_days, supplier_id),
     )
     conn.commit()
+
+
+# ---------- Months ----------
+
+def get_months(conn):
+    """Every month with orders or fixed expenses, as 'YYYY-MM', oldest first."""
+    rows = conn.execute(
+        """
+        SELECT strftime('%Y-%m', created_at) AS month FROM orders
+        UNION
+        SELECT month FROM fixed_expenses
+        ORDER BY month
+        """
+    ).fetchall()
+    return [row["month"] for row in rows]
+
+
+def get_sales_period_in_month(conn, month):
+    """First and last day with orders within one month ('YYYY-MM'), or (None, None) if it has none."""
+    row = conn.execute(
+        "SELECT MIN(date(created_at)), MAX(date(created_at)) FROM orders WHERE strftime('%Y-%m', created_at) = ?",
+        (month,),
+    ).fetchone()
+    return row[0], row[1]
+
+
+def get_all_fixed_expenses(conn):
+    """Every fixed expense of every month, for the month-by-month history."""
+    rows = conn.execute("SELECT id, description, amount, month FROM fixed_expenses ORDER BY month").fetchall()
+    return [dict(row) for row in rows]

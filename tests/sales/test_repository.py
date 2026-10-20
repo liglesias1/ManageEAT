@@ -12,7 +12,9 @@ from domains.sales.repository import (
     get_ingredient_choices,
     get_purchases,
     get_last_order_day,
+    get_months,
     get_sales_period,
+    get_sales_period_in_month,
     get_stock_levels,
     get_supplier,
     get_suppliers,
@@ -150,3 +152,20 @@ def test_fixed_expenses_by_month(conn):
     add_fixed_expense(conn, "Insurance", 180, "2026-09")
     september = get_fixed_expenses(conn, "2026-09")
     assert [e["description"] for e in september] == ["Rent", "Insurance"]   # biggest first
+
+
+def test_months_come_from_orders_and_fixed_expenses(conn):
+    add_menu(conn)
+    add_order(conn, 1, "PAE01", 1, 18)                       # an order in 2026-09
+    add_fixed_expense(conn, "Rent", 3000, "2026-10")         # an expense in a month with no orders yet
+    add_fixed_expense(conn, "Water", 100, "2026-09")
+    assert get_months(conn) == ["2026-09", "2026-10"]
+
+
+def test_sales_period_in_month_only_looks_at_that_month(conn):
+    add_menu(conn)
+    add_order(conn, 1, "PAE01", 1, 18)                       # 2026-09-01
+    conn.execute("INSERT INTO orders VALUES (2, 1, 2, '2026-10-05T14:00:00')")
+    assert get_sales_period_in_month(conn, "2026-09") == ("2026-09-01", "2026-09-01")
+    assert get_sales_period_in_month(conn, "2026-10") == ("2026-10-05", "2026-10-05")
+    assert get_sales_period_in_month(conn, "2026-11") == (None, None)
