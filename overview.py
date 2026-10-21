@@ -14,6 +14,7 @@ from domains.personnel import repository as personnel_repo
 from domains.personnel import services as personnel
 from domains.sales import repository as sales_repo
 from domains.sales import services as sales
+from domains.sales import wages
 from web import templates
 
 router = APIRouter(tags=["overview"])
@@ -31,7 +32,7 @@ def _sales_figures(conn, restaurant_id):
     statement = sales.profit_and_loss(
         sales_repo.get_daily_sales(conn, restaurant_id, start, end) if start else [],
         sales_repo.get_fixed_expenses(conn, restaurant_id, month),
-        lambda a, b: personnel.labor_cost(conn, restaurant_id, a, b),
+        wages.in_process(restaurant_id),
         start,
         end,
     )
