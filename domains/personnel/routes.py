@@ -1,5 +1,7 @@
-"""Web pages of the personnel domain."""
-from fastapi import APIRouter, Depends, Request
+"""Web pages of the personnel domain, and the JSON endpoint the sales domain uses for wage costs."""
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from accounts.dependencies import current_restaurant
@@ -12,6 +14,7 @@ from domains.personnel.services import (
     average_staff_on_shift,
     build_schedule,
     calculate_payroll,
+    labor_cost,
     payroll_by_role,
     schedule_summary,
 )
@@ -76,3 +79,22 @@ def payroll_page(request: Request, restaurant_id: int = Depends(current_restaura
             "total_hours": sum(p["hours"] for p in payroll),
         },
     )
+
+
+# ---------- The seam, as an API ----------
+
+@router.get("/api/labor-cost")
+def labor_cost_api(start: date, end: date, restaurant_id: int = Depends(current_restaurant)):
+    """Total wage cost between two dates (inclusive), as JSON: what sales asks for in its profit and loss.
+
+    Today sales calls labor_cost() directly; when personnel becomes its own service in Assignment 2,
+    sales asks this endpoint instead (domains/sales/wages.py), and tests/test_seam.py checks both agree.
+    """
+    if start > end:
+        raise HTTPException(status_code=422, detail="start must be on or before end")
+    conn = get_connection()
+    try:
+        cost = labor_cost(conn, restaurant_id, start.isoformat(), end.isoformat())
+    finally:
+        conn.close()
+    return {"start": start.isoformat(), "end": end.isoformat(), "labor_cost": cost}

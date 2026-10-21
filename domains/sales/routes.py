@@ -9,8 +9,7 @@ from pydantic import ValidationError
 
 from accounts.dependencies import current_restaurant
 from database import get_connection
-from domains.personnel.services import labor_cost  # the only thing sales uses from personnel (see ADR-2)
-from domains.sales import repository
+from domains.sales import repository, wages  # wages: the only way sales gets numbers from personnel (ADR-2)
 from domains.sales.repository import get_dish_sales
 from domains.sales.schemas import DishIn, FixedExpenseIn, IngredientIn, PurchaseIn, SupplierIn
 from domains.sales.services import (
@@ -587,13 +586,11 @@ def _profit_loss_page(request, restaurant_id, month=None, errors=None, form=None
         daily = repository.get_daily_sales(conn, restaurant_id, start, end) if start else []
         expenses = repository.get_fixed_expenses(conn, restaurant_id, month)
         # Wages come from the personnel domain through one function: this is the seam between the two
-        def wages(start_day, end_day):
-            return labor_cost(conn, restaurant_id, start_day, end_day)
-
-        statement = profit_and_loss(daily, expenses, wages, start, end)
+        labor_cost_for = wages.in_process(restaurant_id)
+        statement = profit_and_loss(daily, expenses, labor_cost_for, start, end)
         first, last = repository.get_sales_period(conn, restaurant_id)
         history = month_history(repository.get_daily_sales(conn, restaurant_id, first, last) if first else [],
-                                repository.get_all_fixed_expenses(conn, restaurant_id), wages, months)
+                                repository.get_all_fixed_expenses(conn, restaurant_id), labor_cost_for, months)
     finally:
         conn.close()
 
