@@ -31,10 +31,10 @@ EMPLOYEES = [
 ]
 
 
-def seed_personnel_if_empty(conn):
-    """Loads the demo roles and employees, only on a brand-new database."""
-    if conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] > 0:
+def seed_personnel_if_empty(conn, restaurant_id):
+    """Loads the demo roles and employees into a restaurant that has no roles yet."""
+    if conn.execute("SELECT COUNT(*) FROM roles WHERE restaurant_id = ?", (restaurant_id,)).fetchone()[0] > 0:
         return
-    conn.executemany("INSERT INTO roles VALUES (?, ?, ?, ?, ?)", ROLES)
-    conn.executemany("INSERT INTO employees VALUES (?, ?, ?)", EMPLOYEES)
+    conn.executemany("INSERT INTO roles VALUES (?, ?, ?, ?, ?, ?)", [(r[0], restaurant_id, *r[1:]) for r in ROLES])
+    conn.executemany("INSERT INTO employees VALUES (?, ?, ?, ?)", [(e[0], restaurant_id, *e[1:]) for e in EMPLOYEES])
     conn.commit()

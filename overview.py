@@ -5,9 +5,10 @@ so the rule of ADR-2 (sales and personnel stay separable) still holds.
 """
 from datetime import date
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
+from accounts.dependencies import current_restaurant
 from database import get_connection
 from domains.personnel import repository as personnel_repo
 from domains.personnel import services as personnel
@@ -18,18 +19,19 @@ from web import templates
 router = APIRouter(tags=["overview"])
 
 
-def _sales_figures(conn):
-    dishes = sales.classify_menu(sales_repo.get_dish_sales(conn))
-    as_of = sales_repo.get_last_order_day(conn)
-    stock = sales.stock_status(sales_repo.get_stock_levels(conn), as_of)
+def _sales_figures(conn, restaurant_id):
+    dishes = sales.classify_menu(sales_repo.get_dish_sales(conn, restaurant_id))
+    as_of = sales_repo.get_last_order_day(conn, restaurant_id)
+    stock = sales.stock_status(sales_repo.get_stock_levels(conn, restaurant_id), as_of)
     # Same month as the profit and loss page shows by default
     current = date.today().strftime("%Y-%m")
-    month = sales.choose_month(sales_repo.get_months(conn), None, as_of[:7] if as_of else None, current)
-    start, end = sales_repo.get_sales_period_in_month(conn, month)
+    months = sales_repo.get_months(conn, restaurant_id)
+    month = sales.choose_month(months, None, as_of[:7] if as_of else None, current)
+    start, end = sales_repo.get_sales_period_in_month(conn, restaurant_id, month)
     statement = sales.profit_and_loss(
-        sales_repo.get_daily_sales(conn, start, end) if start else [],
-        sales_repo.get_fixed_expenses(conn, month),
-        lambda a, b: personnel.labor_cost(conn, a, b),
+        sales_repo.get_daily_sales(conn, restaurant_id, start, end) if start else [],
+        sales_repo.get_fixed_expenses(conn, restaurant_id, month),
+        lambda a, b: personnel.labor_cost(conn, restaurant_id, a, b),
         start,
         end,
     )
@@ -45,13 +47,14 @@ def _sales_figures(conn):
     }
 
 
-def _personnel_figures(conn):
-    open_days = personnel_repo.get_open_days(conn)
-    demand = personnel.average_demand(personnel_repo.get_covers_by_hour(conn), open_days)
-    staff = personnel.average_staff_on_shift(personnel_repo.get_shifts(conn), open_days)
-    schedule = personnel.build_schedule(demand, staff, personnel_repo.get_roles(conn))
-    start, end = personnel_repo.get_clock_in_period(conn)
-    payroll = personnel.calculate_payroll(personnel_repo.get_worked_shifts(conn, start, end) if start else [])
+def _personnel_figures(conn, restaurant_id):
+    open_days = personnel_repo.get_open_days(conn, restaurant_id)
+    demand = personnel.average_demand(personnel_repo.get_covers_by_hour(conn, restaurant_id), open_days)
+    staff = personnel.average_staff_on_shift(personnel_repo.get_shifts(conn, restaurant_id), open_days)
+    schedule = personnel.build_schedule(demand, staff, personnel_repo.get_roles(conn, restaurant_id))
+    start, end = personnel_repo.get_clock_in_period(conn, restaurant_id)
+    shifts = personnel_repo.get_worked_shifts(conn, restaurant_id, start, end) if start else []
+    payroll = personnel.calculate_payroll(shifts)
     return {
         "schedule": personnel.schedule_summary(schedule),
         "employees": len(payroll),
@@ -79,10 +82,10 @@ def attention_items(figures):
 
 
 @router.get("/", response_class=HTMLResponse)
-def overview_page(request: Request):
+def overview_page(request: Request, restaurant_id: int = Depends(current_restaurant)):
     conn = get_connection()
     try:
-        figures = {**_sales_figures(conn), **_personnel_figures(conn)}
+        figures = {**_sales_figures(conn, restaurant_id), **_personnel_figures(conn, restaurant_id)}
     finally:
         conn.close()
     return templates.TemplateResponse(

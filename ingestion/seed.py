@@ -34,7 +34,6 @@ POPULARITY = {
 HOURLY_WEIGHT = {13: 3, 14: 6, 15: 3, 20: 2, 21: 6, 22: 5, 23: 1}
 
 # Demo staff: employee_id -> which service they usually work
-# Demo staff: employee_id -> which service they usually work
 EMPLOYEE_SHIFTS = {
     1: "lunch", 2: "lunch", 3: "dinner", 4: "dinner", 5: "lunch", 6: "dinner",
     7: "lunch", 8: "dinner", 9: "lunch", 10: "lunch", 11: "dinner", 12: "lunch",
@@ -83,15 +82,16 @@ def _shift_for(rng, day, service):
     # People clock in/out a few minutes off the official times
     return start + timedelta(minutes=rng.randint(-10, 10)), end + timedelta(minutes=rng.randint(-5, 20))
 
-def generate_demo_data(conn, start=date(2026, 9, 1), days=28, seed=42):
+def generate_demo_data(conn, restaurant_id, start=date(2026, 9, 1), days=28, seed=42):
+    """Fills the orders and clock-ins of one restaurant with `days` days of demo data."""
     rng = random.Random(seed)
     for offset in range(days):
         day = start + timedelta(days=offset)
 
         for when, covers, items in _orders_for_day(rng, day):
             cur = conn.execute(
-                "INSERT INTO orders (table_no, covers, created_at) VALUES (?, ?, ?)",
-                (rng.randint(1, 20), covers, when.isoformat()),
+                "INSERT INTO orders (restaurant_id, table_no, covers, created_at) VALUES (?, ?, ?, ?)",
+                (restaurant_id, rng.randint(1, 20), covers, when.isoformat()),
             )
             for code, qty in items.items():
                 conn.execute(
@@ -104,15 +104,13 @@ def generate_demo_data(conn, start=date(2026, 9, 1), days=28, seed=42):
                 continue
             clock_in, clock_out = _shift_for(rng, day, service)
             conn.execute(
-                "INSERT INTO clock_ins (employee_id, clock_in, clock_out) VALUES (?, ?, ?)",
-                (employee_id, clock_in.isoformat(), clock_out.isoformat()),
+                "INSERT INTO clock_ins (restaurant_id, employee_id, clock_in, clock_out) VALUES (?, ?, ?, ?)",
+                (restaurant_id, employee_id, clock_in.isoformat(), clock_out.isoformat()),
             )
     conn.commit()
 
 
-def seed_if_empty(conn):
-    """Only seeds a brand-new database, so restarting the app never duplicates data."""
-    if conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 0:
-        generate_demo_data(conn)
-
-        
+def seed_if_empty(conn, restaurant_id):
+    """Only seeds a restaurant with no orders yet, so restarting the app never duplicates data."""
+    if conn.execute("SELECT COUNT(*) FROM orders WHERE restaurant_id = ?", (restaurant_id,)).fetchone()[0] == 0:
+        generate_demo_data(conn, restaurant_id)

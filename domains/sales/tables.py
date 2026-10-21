@@ -1,8 +1,13 @@
-"""SQL that creates the tables owned by the sales domain (menu items, ingredients, recipes, suppliers, purchases, fixed expenses)."""
+"""SQL that creates the tables owned by the sales domain (menu items, ingredients, recipes, suppliers, purchases, fixed expenses).
+
+Every table that is read on its own has a restaurant_id. Purchases belong to the restaurant of their
+supplier, so they are always read through it.
+"""
 
 SALES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS suppliers (
     id              INTEGER PRIMARY KEY,
+    restaurant_id   INTEGER NOT NULL,
     name            TEXT    NOT NULL,
     phone           TEXT,
     email           TEXT,
@@ -12,6 +17,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
 
 CREATE TABLE IF NOT EXISTS ingredients (
     id             INTEGER PRIMARY KEY,
+    restaurant_id  INTEGER NOT NULL,
     name           TEXT    NOT NULL,
     unit           TEXT    NOT NULL,
     unit_cost      REAL    NOT NULL,
@@ -21,18 +27,23 @@ CREATE TABLE IF NOT EXISTS ingredients (
     reorder_level  REAL    NOT NULL
 );
 
+-- Two restaurants can both have a dish called PAE01, so the code is unique per restaurant
 CREATE TABLE IF NOT EXISTS menu_items (
-    code      TEXT PRIMARY KEY,
-    name      TEXT NOT NULL,
-    category  TEXT NOT NULL CHECK (category IN ('starter', 'main', 'dessert', 'drink')),
-    price     REAL NOT NULL CHECK (price > 0)
+    restaurant_id  INTEGER NOT NULL,
+    code           TEXT    NOT NULL,
+    name           TEXT    NOT NULL,
+    category       TEXT    NOT NULL CHECK (category IN ('starter', 'main', 'dessert', 'drink')),
+    price          REAL    NOT NULL CHECK (price > 0),
+    PRIMARY KEY (restaurant_id, code)
 );
 
 CREATE TABLE IF NOT EXISTS recipes (
-    item_code      TEXT    NOT NULL REFERENCES menu_items(code),
+    restaurant_id  INTEGER NOT NULL,
+    item_code      TEXT    NOT NULL,
     ingredient_id  INTEGER NOT NULL REFERENCES ingredients(id),
     quantity       REAL    NOT NULL CHECK (quantity > 0),
-    PRIMARY KEY (item_code, ingredient_id)
+    PRIMARY KEY (restaurant_id, item_code, ingredient_id),
+    FOREIGN KEY (restaurant_id, item_code) REFERENCES menu_items (restaurant_id, code)
 );
 
 CREATE TABLE IF NOT EXISTS purchases (
@@ -45,14 +56,15 @@ CREATE TABLE IF NOT EXISTS purchases (
 );
 
 CREATE TABLE IF NOT EXISTS fixed_expenses (
-    id           INTEGER PRIMARY KEY,
-    description  TEXT NOT NULL,
-    amount       REAL NOT NULL CHECK (amount > 0),
-    month        TEXT NOT NULL
+    id             INTEGER PRIMARY KEY,
+    restaurant_id  INTEGER NOT NULL,
+    description    TEXT    NOT NULL,
+    amount         REAL    NOT NULL CHECK (amount > 0),
+    month          TEXT    NOT NULL
 );
 
--- Supplier and ingredient names are unique regardless of case ("Chicken" and "chicken" are the same).
--- Written as indexes rather than column constraints so they are also added to existing databases.
-CREATE UNIQUE INDEX IF NOT EXISTS suppliers_name_unique ON suppliers (name COLLATE NOCASE);
-CREATE UNIQUE INDEX IF NOT EXISTS ingredients_name_unique ON ingredients (name COLLATE NOCASE);
+-- Supplier and ingredient names are unique within a restaurant, regardless of case
+-- ("Chicken" and "chicken" are the same). Two restaurants can each have their own "Chicken".
+CREATE UNIQUE INDEX IF NOT EXISTS suppliers_name_per_restaurant ON suppliers (restaurant_id, name COLLATE NOCASE);
+CREATE UNIQUE INDEX IF NOT EXISTS ingredients_name_per_restaurant ON ingredients (restaurant_id, name COLLATE NOCASE);
 """
