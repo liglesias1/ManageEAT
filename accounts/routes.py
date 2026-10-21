@@ -8,20 +8,12 @@ from pydantic import ValidationError
 from accounts import repository, services
 from accounts.dependencies import current_user
 from accounts.schemas import MIN_PASSWORD_LENGTH, LoginIn, ManagerIn, RegisterIn
-from database import get_connection
-from web import templates
+from database import get_db
+from web import form_errors, templates
 
 router = APIRouter(tags=["accounts"])
 
-
-def _messages(error):
-    """Pydantic errors as short sentences, e.g. 'Password: string should have at least 8 characters'."""
-    messages = []
-    for e in error.errors():
-        field = str(e["loc"][0]).replace("_", " ").capitalize() if e["loc"] else ""
-        text = e["msg"].replace("Value error, ", "")
-        messages.append(f"{field}: {text.lower()}" if field else text.capitalize())
-    return messages
+EMAIL_TAKEN = "Email: there is already an account with that email"
 
 
 def _safe_next(next_path):
@@ -52,24 +44,18 @@ def login_page(request: Request, next: str = "/"):
 
 
 @router.post("/login", response_class=HTMLResponse)
-def login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("/")):
-    form = {"email": email}
+def login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("/"),
+          conn=Depends(get_db)):
     try:
         credentials = LoginIn(email=email, password=password)
+        user = services.authenticate(conn, credentials.email, credentials.password)
     except ValidationError:
-        credentials = None
-    user = None
-    if credentials:
-        conn = get_connection()
-        try:
-            user = services.authenticate(conn, credentials.email, credentials.password)
-        finally:
-            conn.close()
+        user = None
     if user is None:
         # One message for every failure, so the page never tells which emails have an account
         return templates.TemplateResponse(
             request, "accounts/login.html",
-            {"next": next, "form": form, "errors": ["The email or the password is not correct"]},
+            {"next": next, "form": {"email": email}, "errors": ["The email or the password is not correct"]},
             status_code=401,
         )
     _log_in(request, user)
@@ -84,11 +70,16 @@ def logout(request: Request):
 
 # ---------- Register a new restaurant ----------
 
+def _register_page(request, form=None, errors=None, status_code=200):
+    return templates.TemplateResponse(
+        request, "accounts/register.html",
+        {"form": form or {}, "errors": errors or [], "min_password": MIN_PASSWORD_LENGTH}, status_code=status_code,
+    )
+
+
 @router.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    return templates.TemplateResponse(
-        request, "accounts/register.html", {"form": {}, "errors": [], "min_password": MIN_PASSWORD_LENGTH}
-    )
+    return _register_page(request)
 
 
 @router.post("/register", response_class=HTMLResponse)
@@ -98,52 +89,36 @@ def register(
     name: str = Form(""),
     email: str = Form(""),
     password: str = Form(""),
+    conn=Depends(get_db),
 ):
     form = {"restaurant_name": restaurant_name, "name": name, "email": email}
-
-    def page_with(errors):
-        return templates.TemplateResponse(
-            request, "accounts/register.html",
-            {"form": form, "errors": errors, "min_password": MIN_PASSWORD_LENGTH}, status_code=422,
-        )
-
     try:
         account = RegisterIn(restaurant_name=restaurant_name, name=name, email=email, password=password)
     except ValidationError as error:
-        return page_with(_messages(error))
+        return _register_page(request, form, form_errors(error), status_code=422)
+    if services.email_taken(conn, account.email):
+        return _register_page(request, form, [EMAIL_TAKEN], status_code=422)
 
-    conn = get_connection()
-    try:
-        if services.email_taken(conn, account.email):
-            return page_with(["Email: there is already an account with that email"])
-        user_id = services.register_restaurant(conn, account.restaurant_name, account.name, account.email,
-                                               account.password)
-        user = repository.get_user(conn, user_id)
-    finally:
-        conn.close()
-    _log_in(request, user)                   # a new restaurant starts empty, ready to add its menu and staff
+    user_id = services.register_restaurant(conn, account.restaurant_name, account.name, account.email,
+                                           account.password)
+    _log_in(request, repository.get_user(conn, user_id))   # a new restaurant starts empty, ready to fill in
     return RedirectResponse("/", status_code=303)
 
 
 # ---------- Managers of the restaurant ----------
 
-def _managers_page(request, user, errors=None, form=None, added=None, status_code=200):
-    conn = get_connection()
-    try:
-        managers = repository.get_managers(conn, user["restaurant_id"])
-    finally:
-        conn.close()
+def _managers_page(request, conn, user, errors=None, form=None, added=None, status_code=200):
     return templates.TemplateResponse(
         request, "accounts/managers.html",
-        {"managers": managers, "user": user, "errors": errors or [], "form": form or {}, "added": added,
-         "min_password": MIN_PASSWORD_LENGTH},
+        {"managers": repository.get_managers(conn, user["restaurant_id"]), "user": user, "errors": errors or [],
+         "form": form or {}, "added": added, "min_password": MIN_PASSWORD_LENGTH},
         status_code=status_code,
     )
 
 
 @router.get("/account/managers", response_class=HTMLResponse)
-def managers_page(request: Request, added: str = None, user=Depends(current_user)):
-    return _managers_page(request, user, added=added)
+def managers_page(request: Request, added: str = None, conn=Depends(get_db), user=Depends(current_user)):
+    return _managers_page(request, conn, user, added=added)
 
 
 @router.post("/account/managers", response_class=HTMLResponse)
@@ -152,20 +127,16 @@ def add_manager(
     name: str = Form(""),
     email: str = Form(""),
     password: str = Form(""),
+    conn=Depends(get_db),
     user=Depends(current_user),
 ):
     form = {"name": name, "email": email}
     try:
         manager = ManagerIn(name=name, email=email, password=password)
     except ValidationError as error:
-        return _managers_page(request, user, errors=_messages(error), form=form, status_code=422)
+        return _managers_page(request, conn, user, errors=form_errors(error), form=form, status_code=422)
+    if services.email_taken(conn, manager.email):
+        return _managers_page(request, conn, user, errors=[EMAIL_TAKEN], form=form, status_code=422)
 
-    conn = get_connection()
-    try:
-        if services.email_taken(conn, manager.email):
-            return _managers_page(request, user, errors=["Email: there is already an account with that email"],
-                                  form=form, status_code=422)
-        services.add_manager(conn, user["restaurant_id"], manager.name, manager.email, manager.password)
-    finally:
-        conn.close()
+    services.add_manager(conn, user["restaurant_id"], manager.name, manager.email, manager.password)
     return RedirectResponse(f"/account/managers?{urlencode({'added': manager.email})}", status_code=303)
