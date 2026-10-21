@@ -6,6 +6,8 @@ from fastapi import FastAPI  # the web framework that creates the endpoints and 
 from fastapi.staticfiles import StaticFiles
 
 import config
+from accounts.seed import seed_demo_restaurant
+from accounts.tables import ACCOUNTS_SCHEMA
 from database import get_connection, init_db
 from domains.personnel.routes import router as personnel_router  # se renombran porque los dos routers se llaman "router" y chocarían
 from domains.personnel.seed import seed_personnel_if_empty
@@ -23,11 +25,13 @@ async def lifespan(app):
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = get_connection()
     try:
-        init_db(conn, [INPUT_SCHEMA, SALES_SCHEMA, PERSONNEL_SCHEMA])
+        init_db(conn, [ACCOUNTS_SCHEMA, INPUT_SCHEMA, SALES_SCHEMA, PERSONNEL_SCHEMA])
         if config.SEED_DEMO_DATA:
-            seed_if_empty(conn)
-            seed_sales_if_empty(conn)
-            seed_personnel_if_empty(conn)
+            # The demo account owns the demo data; restaurants that register later start empty
+            demo = seed_demo_restaurant(conn)
+            seed_if_empty(conn, demo)
+            seed_sales_if_empty(conn, demo)
+            seed_personnel_if_empty(conn, demo)
     finally:
         conn.close()
     yield

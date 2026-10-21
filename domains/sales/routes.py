@@ -3,10 +3,11 @@ from datetime import date
 from typing import List
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import ValidationError
 
+from accounts.dependencies import current_restaurant
 from database import get_connection
 from domains.personnel.services import labor_cost  # the only thing sales uses from personnel (see ADR-2)
 from domains.sales import repository
@@ -44,10 +45,10 @@ def _redirect(path, **params):
 
 
 @router.get("/menu", response_class=HTMLResponse)
-def menu_page(request: Request):
+def menu_page(request: Request, restaurant_id: int = Depends(current_restaurant)):
     conn = get_connection()
     try:
-        dishes = classify_menu(get_dish_sales(conn))
+        dishes = classify_menu(get_dish_sales(conn, restaurant_id))
     finally:
         conn.close()
 
@@ -67,11 +68,12 @@ def menu_page(request: Request):
     )
 
 
-def _dishes_page(request, errors=None, form=None, added=None, status_code=200, updated=None):
+def _dishes_page(request, restaurant_id, errors=None, form=None, added=None, status_code=200, updated=None):
     conn = get_connection()
     try:
-        costed = cost_dishes(repository.get_menu(conn), repository.get_recipe_lines(conn))
-        ingredients = repository.get_ingredient_choices(conn)
+        costed = cost_dishes(repository.get_menu(conn, restaurant_id),
+                             repository.get_recipe_lines(conn, restaurant_id))
+        ingredients = repository.get_ingredient_choices(conn, restaurant_id)
     finally:
         conn.close()
 
@@ -95,8 +97,9 @@ def _dishes_page(request, errors=None, form=None, added=None, status_code=200, u
 
 
 @router.get("/dishes", response_class=HTMLResponse)
-def dishes_page(request: Request, added: str = None, updated: str = None):
-    return _dishes_page(request, added=added, updated=updated)
+def dishes_page(request: Request, added: str = None, updated: str = None,
+                restaurant_id: int = Depends(current_restaurant)):
+    return _dishes_page(request, restaurant_id, added=added, updated=updated)
 
 
 def _read_dish_form(name, category, price, ingredient_id, quantity):
@@ -123,8 +126,8 @@ def _read_dish_form(name, category, price, ingredient_id, quantity):
     return dish, [], form
 
 
-def _unknown_ingredients(conn, dish):
-    known = {i["id"] for i in repository.get_ingredient_choices(conn)}
+def _unknown_ingredients(conn, restaurant_id, dish):
+    known = {i["id"] for i in repository.get_ingredient_choices(conn, restaurant_id)}
     return any(line.ingredient_id not in known for line in dish.recipe)
 
 
@@ -136,31 +139,33 @@ def create_dish(
     price: str = Form(""),
     ingredient_id: List[str] = Form([]),
     quantity: List[str] = Form([]),
+    restaurant_id: int = Depends(current_restaurant),
 ):
     dish, errors, form = _read_dish_form(name, category, price, ingredient_id, quantity)
     if errors:
-        return _dishes_page(request, errors=errors, form=form, status_code=422)
+        return _dishes_page(request, restaurant_id, errors=errors, form=form, status_code=422)
 
     conn = get_connection()
     try:
-        if _unknown_ingredients(conn, dish):
-            return _dishes_page(request, errors=["Recipe: unknown ingredient"], form=form, status_code=422)
-        code = new_dish_code(dish.name, {d["code"] for d in repository.get_menu(conn)})
-        repository.add_dish(conn, code, dish.name, dish.category, dish.price,
+        if _unknown_ingredients(conn, restaurant_id, dish):
+            return _dishes_page(request, restaurant_id, errors=["Recipe: unknown ingredient"], form=form,
+                                status_code=422)
+        code = new_dish_code(dish.name, {d["code"] for d in repository.get_menu(conn, restaurant_id)})
+        repository.add_dish(conn, restaurant_id, code, dish.name, dish.category, dish.price,
                             [(line.ingredient_id, line.quantity) for line in dish.recipe])
     finally:
         conn.close()
     return _redirect("/sales/dishes", added=dish.name)
 
 
-def _dish_edit_page(request, code, errors=None, form=None, status_code=200):
+def _dish_edit_page(request, restaurant_id, code, errors=None, form=None, status_code=200):
     conn = get_connection()
     try:
-        dish = repository.get_dish(conn, code)
+        dish = repository.get_dish(conn, restaurant_id, code)
         if dish is None:
             raise HTTPException(status_code=404, detail="Dish not found")
-        recipe = repository.get_recipe(conn, code)
-        ingredients = repository.get_ingredient_choices(conn)
+        recipe = repository.get_recipe(conn, restaurant_id, code)
+        ingredients = repository.get_ingredient_choices(conn, restaurant_id)
     finally:
         conn.close()
 
@@ -180,8 +185,9 @@ def _dish_edit_page(request, code, errors=None, form=None, status_code=200):
 
 
 @router.get("/dishes/{code}/edit", response_class=HTMLResponse)
-def edit_dish_page(request: Request, code: str):
-    return _dish_edit_page(request, code)
+def edit_dish_page(request: Request, code: str,
+                   restaurant_id: int = Depends(current_restaurant)):
+    return _dish_edit_page(request, restaurant_id, code)
 
 
 @router.post("/dishes/{code}/edit", response_class=HTMLResponse)
@@ -193,32 +199,34 @@ def update_dish(
     price: str = Form(""),
     ingredient_id: List[str] = Form([]),
     quantity: List[str] = Form([]),
+    restaurant_id: int = Depends(current_restaurant),
 ):
     dish, errors, form = _read_dish_form(name, category, price, ingredient_id, quantity)
     if errors:
-        return _dish_edit_page(request, code, errors=errors, form=form, status_code=422)
+        return _dish_edit_page(request, restaurant_id, code, errors=errors, form=form, status_code=422)
 
     conn = get_connection()
     try:
-        if repository.get_dish(conn, code) is None:
+        if repository.get_dish(conn, restaurant_id, code) is None:
             raise HTTPException(status_code=404, detail="Dish not found")
-        if _unknown_ingredients(conn, dish):
-            return _dish_edit_page(request, code, errors=["Recipe: unknown ingredient"], form=form, status_code=422)
-        repository.update_dish(conn, code, dish.name, dish.category, dish.price,
+        if _unknown_ingredients(conn, restaurant_id, dish):
+            return _dish_edit_page(request, restaurant_id, code, errors=["Recipe: unknown ingredient"], form=form,
+                                   status_code=422)
+        repository.update_dish(conn, restaurant_id, code, dish.name, dish.category, dish.price,
                                [(line.ingredient_id, line.quantity) for line in dish.recipe])
     finally:
         conn.close()
     return _redirect("/sales/dishes", updated=dish.name)
 
 
-def _inventory_page(request, errors=None, form=None, added=None, status_code=200,
+def _inventory_page(request, restaurant_id, errors=None, form=None, added=None, status_code=200,
                     ingredient_errors=None, ingredient_form=None):
     conn = get_connection()
     try:
-        stock = stock_status(repository.get_stock_levels(conn), repository.get_last_order_day(conn))
-        as_of = repository.get_last_order_day(conn)
-        suppliers = repository.get_suppliers(conn)
-        ingredients = repository.get_ingredient_choices(conn)
+        as_of = repository.get_last_order_day(conn, restaurant_id)
+        stock = stock_status(repository.get_stock_levels(conn, restaurant_id), as_of)
+        suppliers = repository.get_suppliers(conn, restaurant_id)
+        ingredients = repository.get_ingredient_choices(conn, restaurant_id)
     finally:
         conn.close()
 
@@ -243,8 +251,9 @@ def _inventory_page(request, errors=None, form=None, added=None, status_code=200
 
 
 @router.get("/inventory", response_class=HTMLResponse)
-def inventory_page(request: Request, added: str = None):
-    return _inventory_page(request, added=added)
+def inventory_page(request: Request, added: str = None,
+                   restaurant_id: int = Depends(current_restaurant)):
+    return _inventory_page(request, restaurant_id, added=added)
 
 
 @router.post("/inventory/ingredients", response_class=HTMLResponse)
@@ -262,6 +271,7 @@ def create_ingredient(
     new_supplier_phone: str = Form(""),
     new_supplier_email: str = Form(""),
     new_supplier_lead_time: str = Form(""),
+    restaurant_id: int = Depends(current_restaurant),
 ):
     form = {"name": name, "unit": unit, "unit_cost": unit_cost, "counted_stock": counted_stock,
             "reorder_level": reorder_level, "counted_at": counted_at, "supplier_choice": supplier_choice,
@@ -281,21 +291,24 @@ def create_ingredient(
             # e.g. ("new_supplier", "email") -> "New supplier email"
             where = " ".join(str(part) for part in e["loc"]).replace("_", " ").capitalize() or "Supplier"
             messages.append(f"{where}: {e['msg'].replace('Value error, ', '').lower()}")
-        return _inventory_page(request, ingredient_errors=messages, ingredient_form=form, status_code=422)
+        return _inventory_page(request, restaurant_id, ingredient_errors=messages, ingredient_form=form,
+                               status_code=422)
 
     conn = get_connection()
     try:
         problem = None
-        if ingredient.supplier_id is not None and repository.get_supplier(conn, ingredient.supplier_id) is None:
+        names_in_use = {i["name"].lower() for i in repository.get_ingredient_choices(conn, restaurant_id)}
+        if ingredient.supplier_id is not None and repository.get_supplier(conn, restaurant_id,
+                                                                          ingredient.supplier_id) is None:
             problem = "Supplier: choose one of the suppliers in the list"
-        elif ingredient.name.lower() in {i["name"].lower() for i in repository.get_ingredient_choices(conn)}:
+        elif ingredient.name.lower() in names_in_use:
             problem = "Name: there is already an ingredient with that name"
-        elif ingredient.new_supplier and _supplier_name_taken(conn, ingredient.new_supplier.name):
+        elif ingredient.new_supplier and _supplier_name_taken(conn, restaurant_id, ingredient.new_supplier.name):
             problem = "New supplier name: that supplier already exists, choose it from the list"
         else:
             new = ingredient.new_supplier
             saved_supplier = repository.add_ingredient(
-                conn, ingredient.name, ingredient.unit, ingredient.unit_cost, ingredient.counted_stock,
+                conn, restaurant_id, ingredient.name, ingredient.unit, ingredient.unit_cost, ingredient.counted_stock,
                 ingredient.counted_at.isoformat(), ingredient.reorder_level,
                 supplier_id=ingredient.supplier_id,
                 new_supplier=(new.name, new.phone, new.email, new.lead_time_days) if new else None,
@@ -304,7 +317,8 @@ def create_ingredient(
         conn.close()
 
     if problem:
-        return _inventory_page(request, ingredient_errors=[problem], ingredient_form=form, status_code=422)
+        return _inventory_page(request, restaurant_id, ingredient_errors=[problem], ingredient_form=form,
+                               status_code=422)
     # The supplier's page now lists the new product, ready to record its first delivery
     return _redirect(f"/sales/suppliers/{saved_supplier}", new_ingredient=ingredient.name)
 
@@ -317,6 +331,7 @@ def create_supplier(
     email: str = Form(""),
     lead_time_days: str = Form(""),
     ingredient_ids: List[str] = Form([]),   # read as text, so a bad value gets a message instead of a JSON error
+    restaurant_id: int = Depends(current_restaurant),
 ):
     form = {"name": name, "phone": phone, "email": email, "lead_time_days": lead_time_days,
             # the ticked boxes are shown again if the form has errors
@@ -325,31 +340,31 @@ def create_supplier(
         supplier = SupplierIn(**{**form, "ingredient_ids": ingredient_ids})
     except ValidationError as error:
         messages = [e["msg"].replace("Value error, ", "").capitalize() for e in error.errors()]
-        return _inventory_page(request, errors=messages, form=form, status_code=422)
+        return _inventory_page(request, restaurant_id, errors=messages, form=form, status_code=422)
 
     conn = get_connection()
     try:
         problem = None
-        known = {i["id"] for i in repository.get_ingredient_choices(conn)}
-        if _supplier_name_taken(conn, supplier.name):
+        known = {i["id"] for i in repository.get_ingredient_choices(conn, restaurant_id)}
+        if _supplier_name_taken(conn, restaurant_id, supplier.name):
             problem = "Name: there is already a supplier with that name"
         elif any(i not in known for i in supplier.ingredient_ids):
             problem = "Ingredients: choose ingredients from the list"
         else:
-            repository.add_supplier(
-                conn, supplier.name, supplier.phone, supplier.email, supplier.lead_time_days, supplier.ingredient_ids
-            )
+            repository.add_supplier(conn, restaurant_id, supplier.name, supplier.phone, supplier.email,
+                                    supplier.lead_time_days, supplier.ingredient_ids)
     finally:
         conn.close()
 
     if problem:
-        return _inventory_page(request, errors=[problem], form=form, status_code=422)
+        return _inventory_page(request, restaurant_id, errors=[problem], form=form, status_code=422)
     return _redirect("/sales/inventory", added=supplier.name)
 
 
-def _supplier_name_taken(conn, name, except_id=None):
+def _supplier_name_taken(conn, restaurant_id, name, except_id=None):
     """True if another supplier already has this name, ignoring upper and lower case."""
-    return any(s["name"].lower() == name.lower() and s["id"] != except_id for s in repository.get_suppliers(conn))
+    suppliers = repository.get_suppliers(conn, restaurant_id)
+    return any(s["name"].lower() == name.lower() and s["id"] != except_id for s in suppliers)
 
 
 def _error_messages(error):
@@ -362,13 +377,13 @@ def _error_messages(error):
     return messages
 
 
-def _ingredient_edit_page(request, ingredient_id, errors=None, form=None, status_code=200):
+def _ingredient_edit_page(request, restaurant_id, ingredient_id, errors=None, form=None, status_code=200):
     conn = get_connection()
     try:
-        ingredient = repository.get_ingredient(conn, ingredient_id)
+        ingredient = repository.get_ingredient(conn, restaurant_id, ingredient_id)
         if ingredient is None:
             raise HTTPException(status_code=404, detail="Ingredient not found")
-        suppliers = repository.get_suppliers(conn)
+        suppliers = repository.get_suppliers(conn, restaurant_id)
     finally:
         conn.close()
 
@@ -381,8 +396,9 @@ def _ingredient_edit_page(request, ingredient_id, errors=None, form=None, status
 
 
 @router.get("/ingredients/{ingredient_id}/edit", response_class=HTMLResponse)
-def edit_ingredient_page(request: Request, ingredient_id: int):
-    return _ingredient_edit_page(request, ingredient_id)
+def edit_ingredient_page(request: Request, ingredient_id: int,
+                         restaurant_id: int = Depends(current_restaurant)):
+    return _ingredient_edit_page(request, restaurant_id, ingredient_id)
 
 
 @router.post("/ingredients/{ingredient_id}/edit", response_class=HTMLResponse)
@@ -396,41 +412,45 @@ def update_ingredient(
     reorder_level: str = Form(""),
     counted_at: str = Form(""),
     supplier_id: str = Form(""),
+    restaurant_id: int = Depends(current_restaurant),
 ):
     form = {"name": name, "unit": unit, "unit_cost": unit_cost, "counted_stock": counted_stock,
             "reorder_level": reorder_level, "counted_at": counted_at, "supplier_id": supplier_id}
     try:
         ingredient = IngredientIn(**form)      # same rules as when the ingredient was added
     except ValidationError as error:
-        return _ingredient_edit_page(request, ingredient_id, errors=_error_messages(error), form=form, status_code=422)
+        return _ingredient_edit_page(request, restaurant_id, ingredient_id, errors=_error_messages(error), form=form,
+                                     status_code=422)
 
     conn = get_connection()
     try:
-        current = repository.get_ingredient(conn, ingredient_id)
+        current = repository.get_ingredient(conn, restaurant_id, ingredient_id)
         if current is None:
             raise HTTPException(status_code=404, detail="Ingredient not found")
-        others = {i["name"].lower() for i in repository.get_ingredient_choices(conn) if i["id"] != ingredient_id}
+        others = {i["name"].lower() for i in repository.get_ingredient_choices(conn, restaurant_id)
+                  if i["id"] != ingredient_id}
         problem = None
-        if repository.get_supplier(conn, ingredient.supplier_id) is None:
+        if repository.get_supplier(conn, restaurant_id, ingredient.supplier_id) is None:
             problem = "Supplier: choose one of the suppliers in the list"
         elif ingredient.name.lower() in others:
             problem = "Name: there is already an ingredient with that name"
         else:
-            repository.update_ingredient(conn, ingredient_id, ingredient.name, ingredient.unit, ingredient.unit_cost,
-                                         ingredient.supplier_id, ingredient.counted_stock,
+            repository.update_ingredient(conn, restaurant_id, ingredient_id, ingredient.name, ingredient.unit,
+                                         ingredient.unit_cost, ingredient.supplier_id, ingredient.counted_stock,
                                          ingredient.counted_at.isoformat(), ingredient.reorder_level)
     finally:
         conn.close()
 
     if problem:
-        return _ingredient_edit_page(request, ingredient_id, errors=[problem], form=form, status_code=422)
+        return _ingredient_edit_page(request, restaurant_id, ingredient_id, errors=[problem], form=form,
+                                     status_code=422)
     return _redirect(f"/sales/suppliers/{ingredient.supplier_id}", updated=ingredient.name)
 
 
-def _supplier_edit_page(request, supplier_id, errors=None, form=None, status_code=200):
+def _supplier_edit_page(request, restaurant_id, supplier_id, errors=None, form=None, status_code=200):
     conn = get_connection()
     try:
-        supplier = repository.get_supplier(conn, supplier_id)
+        supplier = repository.get_supplier(conn, restaurant_id, supplier_id)
     finally:
         conn.close()
     if supplier is None:
@@ -444,8 +464,9 @@ def _supplier_edit_page(request, supplier_id, errors=None, form=None, status_cod
 
 
 @router.get("/suppliers/{supplier_id}/edit", response_class=HTMLResponse)
-def edit_supplier_page(request: Request, supplier_id: int):
-    return _supplier_edit_page(request, supplier_id)
+def edit_supplier_page(request: Request, supplier_id: int,
+                       restaurant_id: int = Depends(current_restaurant)):
+    return _supplier_edit_page(request, restaurant_id, supplier_id)
 
 
 @router.post("/suppliers/{supplier_id}/edit", response_class=HTMLResponse)
@@ -456,40 +477,43 @@ def update_supplier(
     phone: str = Form(""),
     email: str = Form(""),
     lead_time_days: str = Form(""),
+    restaurant_id: int = Depends(current_restaurant),
 ):
     form = {"name": name, "phone": phone, "email": email, "lead_time_days": lead_time_days}
     try:
         supplier = SupplierIn(**form)          # same rules as a new supplier: phone or email required
     except ValidationError as error:
-        return _supplier_edit_page(request, supplier_id, errors=_error_messages(error), form=form, status_code=422)
+        return _supplier_edit_page(request, restaurant_id, supplier_id, errors=_error_messages(error), form=form,
+                                   status_code=422)
 
     conn = get_connection()
     try:
-        if repository.get_supplier(conn, supplier_id) is None:
+        if repository.get_supplier(conn, restaurant_id, supplier_id) is None:
             raise HTTPException(status_code=404, detail="Supplier not found")
-        taken = _supplier_name_taken(conn, supplier.name, except_id=supplier_id)
+        taken = _supplier_name_taken(conn, restaurant_id, supplier.name, except_id=supplier_id)
         if not taken:
-            repository.update_supplier(conn, supplier_id, supplier.name, supplier.phone, supplier.email,
-                                       supplier.lead_time_days)
+            repository.update_supplier(conn, restaurant_id, supplier_id, supplier.name, supplier.phone,
+                                       supplier.email, supplier.lead_time_days)
     finally:
         conn.close()
 
     if taken:
-        return _supplier_edit_page(request, supplier_id, errors=["Name: there is already a supplier with that name"],
-                                   form=form, status_code=422)
+        return _supplier_edit_page(request, restaurant_id, supplier_id,
+                                   errors=["Name: there is already a supplier with that name"], form=form,
+                                   status_code=422)
     return _redirect(f"/sales/suppliers/{supplier_id}", updated=supplier.name)
 
 
-def _supplier_page(request, supplier_id, errors=None, form=None, added=False, status_code=200,
+def _supplier_page(request, restaurant_id, supplier_id, errors=None, form=None, added=False, status_code=200,
                    new_ingredient=None, updated=None):
     conn = get_connection()
     try:
-        supplier = repository.get_supplier(conn, supplier_id)
+        supplier = repository.get_supplier(conn, restaurant_id, supplier_id)
         if supplier is None:
             raise HTTPException(status_code=404, detail="Supplier not found")
-        as_of = repository.get_last_order_day(conn)
-        stock = stock_status(repository.get_stock_levels(conn), as_of)
-        purchases = repository.get_purchases(conn, supplier_id)
+        as_of = repository.get_last_order_day(conn, restaurant_id)
+        stock = stock_status(repository.get_stock_levels(conn, restaurant_id), as_of)
+        purchases = repository.get_purchases(conn, restaurant_id, supplier_id)
     finally:
         conn.close()
 
@@ -514,8 +538,9 @@ def _supplier_page(request, supplier_id, errors=None, form=None, added=False, st
 
 @router.get("/suppliers/{supplier_id}", response_class=HTMLResponse)
 def supplier_page(request: Request, supplier_id: int, added: bool = False, new_ingredient: str = None,
-                  updated: str = None):
-    return _supplier_page(request, supplier_id, added=added, new_ingredient=new_ingredient, updated=updated)
+                  updated: str = None, restaurant_id: int = Depends(current_restaurant)):
+    return _supplier_page(request, restaurant_id, supplier_id, added=added, new_ingredient=new_ingredient,
+                          updated=updated)
 
 
 @router.post("/suppliers/{supplier_id}/purchases", response_class=HTMLResponse)
@@ -526,17 +551,19 @@ def record_purchase(
     quantity: str = Form(""),
     unit_price: str = Form(""),
     received_on: str = Form(""),
+    restaurant_id: int = Depends(current_restaurant),
 ):
     form = {"ingredient_id": ingredient_id, "quantity": quantity, "unit_price": unit_price, "received_on": received_on}
     try:
         purchase = PurchaseIn(**form)
     except ValidationError as error:
         messages = [f"{e['loc'][0].replace('_', ' ').capitalize()}: {e['msg'].lower()}" for e in error.errors()]
-        return _supplier_page(request, supplier_id, errors=messages, form=form, status_code=422)
+        return _supplier_page(request, restaurant_id, supplier_id, errors=messages, form=form, status_code=422)
 
     conn = get_connection()
     try:
-        sold_here = [i["id"] for i in repository.get_stock_levels(conn) if i["supplier_id"] == supplier_id]
+        sold_here = [i["id"] for i in repository.get_stock_levels(conn, restaurant_id)
+                     if i["supplier_id"] == supplier_id]
         if purchase.ingredient_id in sold_here:
             repository.add_purchase(conn, supplier_id, purchase.ingredient_id, purchase.quantity,
                                     purchase.unit_price, purchase.received_on.isoformat())
@@ -544,29 +571,29 @@ def record_purchase(
         conn.close()
 
     if purchase.ingredient_id not in sold_here:
-        return _supplier_page(request, supplier_id, errors=["This supplier does not sell that product"],
+        return _supplier_page(request, restaurant_id, supplier_id, errors=["This supplier does not sell that product"],
                               form=form, status_code=422)
     return _redirect(f"/sales/suppliers/{supplier_id}", added="true")
 
 
-def _profit_loss_page(request, month=None, errors=None, form=None, added=None, status_code=200):
+def _profit_loss_page(request, restaurant_id, month=None, errors=None, form=None, added=None, status_code=200):
     current = date.today().strftime("%Y-%m")    # the only place that reads today's date, so the logic stays testable
     conn = get_connection()
     try:
-        months = repository.get_months(conn)
-        last_day = repository.get_last_order_day(conn)
+        months = repository.get_months(conn, restaurant_id)
+        last_day = repository.get_last_order_day(conn, restaurant_id)
         month = choose_month(months, month, last_day[:7] if last_day else None, current)
-        start, end = repository.get_sales_period_in_month(conn, month)
-        daily = repository.get_daily_sales(conn, start, end) if start else []
-        expenses = repository.get_fixed_expenses(conn, month)
+        start, end = repository.get_sales_period_in_month(conn, restaurant_id, month)
+        daily = repository.get_daily_sales(conn, restaurant_id, start, end) if start else []
+        expenses = repository.get_fixed_expenses(conn, restaurant_id, month)
         # Wages come from the personnel domain through one function: this is the seam between the two
         def wages(start_day, end_day):
-            return labor_cost(conn, start_day, end_day)
+            return labor_cost(conn, restaurant_id, start_day, end_day)
 
         statement = profit_and_loss(daily, expenses, wages, start, end)
-        first, last = repository.get_sales_period(conn)
-        history = month_history(repository.get_daily_sales(conn, first, last) if first else [],
-                                repository.get_all_fixed_expenses(conn), wages, months)
+        first, last = repository.get_sales_period(conn, restaurant_id)
+        history = month_history(repository.get_daily_sales(conn, restaurant_id, first, last) if first else [],
+                                repository.get_all_fixed_expenses(conn, restaurant_id), wages, months)
     finally:
         conn.close()
 
@@ -594,8 +621,9 @@ def _profit_loss_page(request, month=None, errors=None, form=None, added=None, s
 
 
 @router.get("/profit-loss", response_class=HTMLResponse)
-def profit_loss_page(request: Request, month: str = None, added: str = None):
-    return _profit_loss_page(request, month=month, added=added)
+def profit_loss_page(request: Request, month: str = None, added: str = None,
+                     restaurant_id: int = Depends(current_restaurant)):
+    return _profit_loss_page(request, restaurant_id, month=month, added=added)
 
 
 @router.post("/profit-loss/expenses", response_class=HTMLResponse)
@@ -604,17 +632,18 @@ def create_fixed_expense(
     description: str = Form(""),
     amount: str = Form(""),
     month: str = Form(""),
+    restaurant_id: int = Depends(current_restaurant),
 ):
     form = {"description": description, "amount": amount, "month": month}
     try:
         expense = FixedExpenseIn(**form)
     except ValidationError as error:
         messages = [f"{e['loc'][0].capitalize()}: {e['msg'].lower()}" for e in error.errors()]
-        return _profit_loss_page(request, month=month, errors=messages, form=form, status_code=422)
+        return _profit_loss_page(request, restaurant_id, month=month, errors=messages, form=form, status_code=422)
 
     conn = get_connection()
     try:
-        repository.add_fixed_expense(conn, expense.description, expense.amount, expense.month)
+        repository.add_fixed_expense(conn, restaurant_id, expense.description, expense.amount, expense.month)
     finally:
         conn.close()
     # Show the month the expense belongs to, which may not be the one that was on screen

@@ -70,15 +70,15 @@ def test_dish_form_needs_a_recipe_without_repeated_ingredients():
 
 
 def test_add_dish_saves_dish_and_recipe_together(conn):
-    conn.execute("INSERT INTO suppliers (id, name, email, lead_time_days) VALUES (1, 'S', 's@s.es', 2)")
-    conn.execute("INSERT INTO ingredients VALUES (1, 'Rice', 'kg', 2.0, 1, 10, '2026-09-01', 1)")
-    add_dish(conn, "RIC01", "Rice bowl", "main", 9.5, [(1, 0.2)])
-    assert get_menu(conn) == [{"code": "RIC01", "name": "Rice bowl", "category": "main", "price": 9.5}]
-    assert get_recipe_lines(conn)[0]["quantity"] == 0.2
+    conn.execute("INSERT INTO suppliers (id, restaurant_id, name, email, lead_time_days) VALUES (1, 1, 'S', 's@s.es', 2)")
+    conn.execute("INSERT INTO ingredients VALUES (1, 1, 'Rice', 'kg', 2.0, 1, 10, '2026-09-01', 1)")
+    add_dish(conn, 1, "RIC01", "Rice bowl", "main", 9.5, [(1, 0.2)])
+    assert get_menu(conn, 1) == [{"code": "RIC01", "name": "Rice bowl", "category": "main", "price": 9.5}]
+    assert get_recipe_lines(conn, 1)[0]["quantity"] == 0.2
 
 
 def test_add_dish_saves_nothing_if_the_recipe_fails(conn):
     # Ingredient 99 does not exist: the foreign key fails, so the dish must not be saved either
     with pytest.raises(Exception):
-        add_dish(conn, "BAD01", "Bad", "main", 9.5, [(99, 1)])
-    assert get_menu(conn) == []
+        add_dish(conn, 1, "BAD01", "Bad", "main", 9.5, [(99, 1)])
+    assert get_menu(conn, 1) == []

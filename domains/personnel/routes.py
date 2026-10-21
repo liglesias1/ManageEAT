@@ -1,7 +1,8 @@
 """Web pages of the personnel domain."""
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
+from accounts.dependencies import current_restaurant
 from database import get_connection
 from domains.personnel import repository
 
@@ -21,13 +22,13 @@ router = APIRouter(prefix="/personnel", tags=["personnel"])
 
 
 @router.get("/schedule", response_class=HTMLResponse)
-def schedule_page(request: Request):
+def schedule_page(request: Request, restaurant_id: int = Depends(current_restaurant)):
     conn = get_connection()
     try:
-        open_days = repository.get_open_days(conn)
-        demand = average_demand(repository.get_covers_by_hour(conn), open_days)
-        staff = average_staff_on_shift(repository.get_shifts(conn), open_days)
-        roles = repository.get_roles(conn)
+        open_days = repository.get_open_days(conn, restaurant_id)
+        demand = average_demand(repository.get_covers_by_hour(conn, restaurant_id), open_days)
+        staff = average_staff_on_shift(repository.get_shifts(conn, restaurant_id), open_days)
+        roles = repository.get_roles(conn, restaurant_id)
     finally:
         conn.close()
 
@@ -53,11 +54,11 @@ def schedule_page(request: Request):
 
 
 @router.get("/payroll", response_class=HTMLResponse)
-def payroll_page(request: Request):
+def payroll_page(request: Request, restaurant_id: int = Depends(current_restaurant)):
     conn = get_connection()
     try:
-        start, end = repository.get_clock_in_period(conn)
-        shifts = repository.get_worked_shifts(conn, start, end) if start else []
+        start, end = repository.get_clock_in_period(conn, restaurant_id)
+        shifts = repository.get_worked_shifts(conn, restaurant_id, start, end) if start else []
     finally:
         conn.close()
 

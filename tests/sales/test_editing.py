@@ -3,16 +3,16 @@ from domains.sales.repository import get_dish, get_ingredient, get_recipe, updat
 
 
 def test_update_dish_replaces_the_whole_recipe(conn):
-    conn.execute("INSERT INTO suppliers (id, name, email, lead_time_days) VALUES (1, 'S', 's@s.es', 2)")
-    conn.execute("INSERT INTO ingredients VALUES (1, 'Rice', 'kg', 2.0, 1, 10, '2026-09-01', 1)")
-    conn.execute("INSERT INTO ingredients VALUES (2, 'Chicken', 'kg', 6.0, 1, 10, '2026-09-01', 1)")
-    conn.execute("INSERT INTO menu_items VALUES ('PAE01', 'Paella', 'main', 18)")
-    conn.execute("INSERT INTO recipes VALUES ('PAE01', 1, 0.1)")
-    update_dish(conn, "PAE01", "Paella mixta", "main", 19.5, [(2, 0.2)])
-    assert get_dish(conn, "PAE01")["price"] == 19.5
-    assert get_recipe(conn, "PAE01") == [(2, 0.2)]          # rice removed, chicken added
-    assert get_dish(conn, "NOPE") is None
-    assert get_ingredient(conn, 99) is None
+    conn.execute("INSERT INTO suppliers (id, restaurant_id, name, email, lead_time_days) VALUES (1, 1, 'S', 's@s.es', 2)")
+    conn.execute("INSERT INTO ingredients VALUES (1, 1, 'Rice', 'kg', 2.0, 1, 10, '2026-09-01', 1)")
+    conn.execute("INSERT INTO ingredients VALUES (2, 1, 'Chicken', 'kg', 6.0, 1, 10, '2026-09-01', 1)")
+    conn.execute("INSERT INTO menu_items VALUES (1, 'PAE01', 'Paella', 'main', 18)")
+    conn.execute("INSERT INTO recipes VALUES (1, 'PAE01', 1, 0.1)")
+    update_dish(conn, 1, "PAE01", "Paella mixta", "main", 19.5, [(2, 0.2)])
+    assert get_dish(conn, 1, "PAE01")["price"] == 19.5
+    assert get_recipe(conn, 1, "PAE01") == [(2, 0.2)]          # rice removed, chicken added
+    assert get_dish(conn, 1, "NOPE") is None
+    assert get_ingredient(conn, 1, 99) is None
 
 
 # ---------- dishes ----------

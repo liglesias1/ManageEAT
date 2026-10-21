@@ -144,10 +144,11 @@ def payroll_by_role(payroll):
     return list(roles.values())
 
 
-def labor_cost(conn, start, end):
-    """Total wage cost between two dates (inclusive).
+def labor_cost(conn, restaurant_id, start, end):
+    """Total wage cost of one restaurant between two dates (inclusive).
 
     This is the ONLY function the sales domain may use from personnel: the seam between the two
     domains. In Assignment 2 it becomes an HTTP endpoint of the personnel service.
     """
-    return round(sum(person["pay"] for person in calculate_payroll(repository.get_worked_shifts(conn, start, end))), 2)
+    shifts = repository.get_worked_shifts(conn, restaurant_id, start, end)
+    return round(sum(person["pay"] for person in calculate_payroll(shifts)), 2)
