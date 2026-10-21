@@ -7,7 +7,7 @@ LoginRequired is raised and app.py sends the browser to the login page.
 from fastapi import Depends, Request
 
 from accounts import repository
-from database import get_connection
+from database import get_db
 
 
 class LoginRequired(Exception):
@@ -18,16 +18,12 @@ class LoginRequired(Exception):
         self.path = path
 
 
-def current_user(request: Request):
+def current_user(request: Request, conn=Depends(get_db)):
     """The logged-in manager, read from the signed session cookie."""
     user_id = request.session.get("user_id")
     if user_id is None:
         raise LoginRequired(request.url.path)
-    conn = get_connection()
-    try:
-        user = repository.get_user(conn, user_id)
-    finally:
-        conn.close()
+    user = repository.get_user(conn, user_id)
     if user is None:                      # the account was removed after logging in
         request.session.clear()
         raise LoginRequired(request.url.path)

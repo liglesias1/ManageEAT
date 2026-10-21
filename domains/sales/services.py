@@ -303,3 +303,48 @@ def month_history(daily_sales, fixed_expenses, labor_cost_for, months):
         history.append({"month": month, **{key: statement[key] for key in (
             "revenue", "ingredients", "labor", "fixed", "net_profit", "net_margin_pct")}})
     return history
+
+# ---------- Business rules of the forms ----------
+# The routes read what the rules need from the database and show the message these functions return;
+# the rules themselves live here, without SQL or HTTP, so they are tested with plain lists.
+
+def name_taken(name, names):
+    """True if `name` is already in `names`, ignoring upper and lower case: 'makro' clashes with 'Makro'."""
+    return name.lower() in {n.lower() for n in names}
+
+
+def dish_problem(dish, ingredient_ids):
+    """Why a dish cannot be saved, or None: every recipe line must use one of the restaurant's ingredients."""
+    if any(line.ingredient_id not in ingredient_ids for line in dish.recipe):
+        return "Recipe: unknown ingredient"
+    return None
+
+
+def ingredient_problem(ingredient, other_ingredient_names, supplier_ids, supplier_names):
+    """Why an ingredient cannot be saved, or None.
+
+    `other_ingredient_names` leaves out the ingredient being edited, so it can keep its own name.
+    """
+    if ingredient.supplier_id is not None and ingredient.supplier_id not in supplier_ids:
+        return "Supplier: choose one of the suppliers in the list"
+    if name_taken(ingredient.name, other_ingredient_names):
+        return "Name: there is already an ingredient with that name"
+    if ingredient.new_supplier and name_taken(ingredient.new_supplier.name, supplier_names):
+        return "New supplier name: that supplier already exists, choose it from the list"
+    return None
+
+
+def supplier_problem(supplier, other_supplier_names, ingredient_ids):
+    """Why a supplier cannot be saved, or None. `other_supplier_names` leaves out the one being edited."""
+    if name_taken(supplier.name, other_supplier_names):
+        return "Name: there is already a supplier with that name"
+    if any(i not in ingredient_ids for i in supplier.ingredient_ids):
+        return "Ingredients: choose ingredients from the list"
+    return None
+
+
+def purchase_problem(purchase, ingredient_ids_of_supplier):
+    """Why a delivery cannot be recorded, or None: a supplier only delivers the products it sells."""
+    if purchase.ingredient_id not in ingredient_ids_of_supplier:
+        return "This supplier does not sell that product"
+    return None

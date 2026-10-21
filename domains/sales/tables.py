@@ -4,7 +4,11 @@ Every table that is read on its own has a restaurant_id. Purchases belong to the
 supplier, so they are always read through it.
 """
 
-SALES_SCHEMA = """
+from domains.sales.schemas import CATEGORIES
+
+_CATEGORY_LIST = ", ".join(f"'{c}'" for c in CATEGORIES)   # 'main', 'starter', 'dessert', 'drink'
+
+SALES_SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS suppliers (
     id              INTEGER PRIMARY KEY,
     restaurant_id   INTEGER NOT NULL,
@@ -32,7 +36,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
     restaurant_id  INTEGER NOT NULL,
     code           TEXT    NOT NULL,
     name           TEXT    NOT NULL,
-    category       TEXT    NOT NULL CHECK (category IN ('starter', 'main', 'dessert', 'drink')),
+    category       TEXT    NOT NULL CHECK (category IN ({_CATEGORY_LIST})),
     price          REAL    NOT NULL CHECK (price > 0),
     PRIMARY KEY (restaurant_id, code)
 );
