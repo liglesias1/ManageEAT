@@ -2,25 +2,20 @@
 
 profit_and_loss() receives a function labor_cost_for(start, end) and never asks where the number comes
 from. This file builds that function in two ways that must always give the same result:
-- in_process(restaurant_id): calls personnel's code directly. Used today, with one app and one database.
+- in_process(restaurant_id): calls personnel's public facade directly. Used today, with one app.
 - over_http(http_client): asks personnel's JSON endpoint, /personnel/api/labor-cost. Used in Assignment 2,
   when personnel is a separate service: over_http(httpx.Client(base_url=<personnel service URL>)).
 tests/test_seam.py checks that both give the same numbers, so the switch does not change any figure.
 """
-from database import get_connection
-from domains.personnel.services import labor_cost
+from domains.personnel import public as personnel
 
 LABOR_COST_URL = "/personnel/api/labor-cost"
 
 
 def in_process(restaurant_id):
-    """Wage costs read straight from personnel's tables, with a connection of its own."""
+    """Wage costs asked to the personnel domain inside the same app."""
     def labor_cost_for(start, end):
-        conn = get_connection()
-        try:
-            return labor_cost(conn, restaurant_id, start, end)
-        finally:
-            conn.close()
+        return personnel.labor_cost(restaurant_id, start, end)
     return labor_cost_for
 
 
