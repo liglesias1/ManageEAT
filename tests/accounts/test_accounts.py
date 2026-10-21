@@ -62,3 +62,22 @@ def test_a_manager_must_belong_to_an_existing_restaurant(conn):
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO users (restaurant_id, name, email, password_hash) VALUES (99, 'Nobody', "
                      "'nobody@manageeat.com', 'x')")
+
+
+
+# ---------- Checking a login ----------
+
+def test_authenticate_returns_the_manager_only_with_the_right_password(conn):
+    from accounts.services import authenticate, register_restaurant
+
+    register_restaurant(conn, "Bar Pepe", "Pepe", "pepe@barpepe.es", "tortilla99")
+    assert authenticate(conn, "pepe@barpepe.es", "tortilla99")["restaurant"] == "Bar Pepe"
+    assert authenticate(conn, "PEPE@barpepe.es", "tortilla99") is not None
+    assert authenticate(conn, "pepe@barpepe.es", "wrong") is None
+    assert authenticate(conn, "nobody@barpepe.es", "tortilla99") is None
+
+
+def test_an_unknown_user_id_finds_no_account(conn):
+    from accounts.repository import get_user
+
+    assert get_user(conn, 999) is None

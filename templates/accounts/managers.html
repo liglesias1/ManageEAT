@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Managers{% endblock %}
+{% block heading %}Managers of {{ user.restaurant }}{% endblock %}
+{% block intro %}
+Everyone who can log in to this restaurant. Each manager has their own email and password and sees the same data.
+{% endblock %}
+
+{% block content %}
+<div class="split">
+  <section class="card">
+    <h2>Managers</h2>
+    <p class="hint">{{ managers | length }} with access.</p>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th></tr></thead>
+      <tbody>
+        {% for m in managers %}
+        <tr>
+          <td>{{ m.name }}{% if m.id == user.id %} <span class="badge new">You</span>{% endif %}</td>
+          <td>{{ m.email }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" id="new-manager">
+    <h2>Add a manager</h2>
+    <p class="hint">They log in with their own email and password. Share the password with them in person.</p>
+    {% if added %}<p class="notice success">Manager “{{ added }}” added.</p>{% endif %}
+    {% if errors %}
+    <div class="notice error">
+      {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+    </div>
+    {% endif %}
+    <form method="post" action="/account/managers#new-manager" class="form">
+      <label>Name<input name="name" value="{{ form.name or '' }}" required minlength="2"></label>
+      <label>Email<input name="email" type="email" value="{{ form.email or '' }}" required autocomplete="off"></label>
+      <label>Password <span class="muted">(at least {{ min_password }} characters)</span>
+        <input name="password" type="password" required minlength="{{ min_password }}" autocomplete="new-password"></label>
+      <button type="submit">Add manager</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

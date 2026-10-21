@@ -250,7 +250,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 details .link.small { display: inline-block; margin: 0 0 6px 16px; }
 .card.narrow { max-width: 560px; }
 .ingredient-fields input, .ingredient-fields select, .dish-fields input, .dish-fields select { width: 100%; min-width: 0; }
-
+/* Month picker on the profit and loss page */
+.month-picker { margin-bottom: 18px; }
+.month-picker label { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.month-picker select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }
 
 /* Month navigation on the profit and loss page: previous/next arrows, any month, and the history table */
 .month-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 18px; }
@@ -260,3 +263,25 @@ details .link.small { display: inline-block; margin: 0 0 6px 16px; }
 .month-step:hover { border-color: var(--accent); }
 .empty-month { margin-bottom: 22px; }
 tr.selected td { background: var(--bg); font-weight: 600; }
+
+/* Account: who is logged in, at the bottom of the sidebar */
+.sidebar { display: flex; flex-direction: column; }
+.account { margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 13px; }
+.account p { margin: 0; }
+.account-restaurant { font-weight: 600; color: #fff; }
+.account-user { opacity: 0.75; margin-bottom: 10px !important; }
+.account a { display: block; padding: 6px 0; color: var(--sidebar-ink); text-decoration: none; }
+.account a:hover, .account a.active { color: #fff; text-decoration: underline; }
+.account button { padding: 6px 0; border: none; background: none; color: var(--sidebar-ink); font: inherit; cursor: pointer; }
+.account button:hover { color: #fff; text-decoration: underline; }
+
+/* Login and register: a single card in the middle of the page */
+.auth-page { align-items: center; justify-content: center; padding: 24px; }
+.auth-card { width: 100%; max-width: 400px; padding: 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.auth-card .brand { color: var(--ink); }
+.auth-card .brand span { color: var(--accent); }
+.auth-card .brand-sub { color: var(--muted); opacity: 1; margin-bottom: 20px; }
+.auth-card h1 { margin: 0 0 18px; font-size: 20px; }
+.auth-card .form button { justify-self: stretch; }
+.auth-switch { margin: 18px 0 0; font-size: 14px; }
+.auth-demo { margin: 10px 0 0; font-size: 13px; color: var(--muted); }

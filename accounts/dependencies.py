@@ -1,11 +1,38 @@
-"""Which restaurant the current request belongs to.
+"""Who is logged in, and which restaurant the current request belongs to.
 
-Every page asks for it with `restaurant_id: int = Depends(current_restaurant)` and passes it to
-the repositories, so every query only sees that restaurant's rows. For now there is no login yet,
-so it is always the demo restaurant; the login step only has to change this one function.
+Every page asks for its restaurant with `restaurant_id: int = Depends(current_restaurant)` and passes
+it to the repositories, so every query only sees that restaurant's rows. If nobody is logged in,
+LoginRequired is raised and app.py sends the browser to the login page.
 """
-from accounts.seed import DEMO_RESTAURANT_ID
+from fastapi import Depends, Request
+
+from accounts import repository
+from database import get_connection
 
 
-def current_restaurant():
-    return DEMO_RESTAURANT_ID
+class LoginRequired(Exception):
+    """Raised when a page needs a logged-in manager; `path` is where to return after logging in."""
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.path = path
+
+
+def current_user(request: Request):
+    """The logged-in manager, read from the signed session cookie."""
+    user_id = request.session.get("user_id")
+    if user_id is None:
+        raise LoginRequired(request.url.path)
+    conn = get_connection()
+    try:
+        user = repository.get_user(conn, user_id)
+    finally:
+        conn.close()
+    if user is None:                      # the account was removed after logging in
+        request.session.clear()
+        raise LoginRequired(request.url.path)
+    return user
+
+
+def current_restaurant(user=Depends(current_user)):
+    return user["restaurant_id"]
