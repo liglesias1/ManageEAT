@@ -1,0 +1,15 @@
+{% extends "accounts/auth_base.html" %}
+{% block title %}Create an account{% endblock %}
+{% block heading %}Create your restaurant's account{% endblock %}
+
+{% block content %}
+<form method="post" action="/register" class="form">
+  <label>Restaurant name<input name="restaurant_name" value="{{ form.restaurant_name or '' }}" required minlength="2" autofocus></label>
+  <label>Your name<input name="name" value="{{ form.name or '' }}" required minlength="2" autocomplete="name"></label>
+  <label>Email<input name="email" type="email" value="{{ form.email or '' }}" required autocomplete="username"></label>
+  <label>Password <span class="muted">(at least {{ min_password }} characters)</span>
+    <input name="password" type="password" required minlength="{{ min_password }}" autocomplete="new-password"></label>
+  <button type="submit">Create account</button>
+</form>
+<p class="auth-switch">Already have an account? <a class="link" href="/login">Log in</a></p>
+{% endblock %}

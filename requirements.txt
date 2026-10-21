@@ -5,3 +5,5 @@ python-multipart==0.0.20 #permite recibir formularios, como el de gastos fijos.
 httpx==0.28.1 #lo usa FastAPI para simular peticiones en los tests.
 pytest==8.4.2 #Los tests se ejecutan con pytest.
 pytest-cov==7.1.0 #pytest-cov es un plugin de pytest que permite medir la cobertura de código de los tests.
+
+itsdangerous==2.2.0 #firma la cookie de sesión del login, para que nadie pueda cambiar de qué usuario es.

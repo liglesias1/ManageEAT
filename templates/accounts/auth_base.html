@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Log in{% endblock %} · ManageEAT</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <p class="brand">Manage<span>EAT</span></p>
+    <p class="brand-sub">Restaurant management</p>
+    <h1>{% block heading %}{% endblock %}</h1>
+    {% if errors %}
+    <div class="notice error">
+      {% for message in errors %}<div>{{ message }}</div>{% endfor %}
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

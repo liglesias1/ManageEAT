@@ -12,3 +12,7 @@ DB_PATH = DATA_DIR / "manageeat.db" #ruta de la base de datos
 
 # If true, the app fills an empty database with demo data on startup.
 SEED_DEMO_DATA = os.getenv("SEED_DEMO_DATA", "true").lower() == "true"
+
+# Signs the login cookie so nobody can forge it. Set a long random value in production;
+# the default only exists so the app runs locally with no setup.
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret-change-me")
