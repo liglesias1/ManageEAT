@@ -1,0 +1,14 @@
+{% extends "accounts/auth_base.html" %}
+{% block title %}Log in{% endblock %}
+{% block heading %}Log in to your restaurant{% endblock %}
+
+{% block content %}
+<form method="post" action="/login" class="form">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>Email<input name="email" type="email" value="{{ form.email or '' }}" required autofocus autocomplete="username"></label>
+  <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
+  <button type="submit">Log in</button>
+</form>
+<p class="auth-switch">New restaurant? <a class="link" href="/register">Create an account</a></p>
+<p class="auth-demo">Just looking? Use the demo account: <strong>demo@manageeat.com</strong> / <strong>demo1234</strong></p>
+{% endblock %}

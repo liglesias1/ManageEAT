@@ -205,3 +205,135 @@ def test_ingredient_with_invalid_price_or_no_supplier_is_rejected(client):
     no_supplier = client.post("/sales/inventory/ingredients", data={**NEW_INGREDIENT, "supplier_id": ""})
     assert no_supplier.status_code == 422
     assert "choose an existing supplier or add a new one" in no_supplier.text
+
+
+# ---------- Profit and loss: months and history ----------
+# These tests use months other than the real current one, so they pass whatever today's date is.
+
+def test_expense_for_another_month_is_shown_in_that_month(client):
+    response = client.post(
+        "/sales/profit-loss/expenses",
+        data={"description": "Summer rent", "amount": "3200", "month": "2026-08"},
+        follow_redirects=False,
+    )
+    assert response.headers["location"] == "/sales/profit-loss?month=2026-08&added=Summer+rent"
+    page = client.get(response.headers["location"]).text
+    assert "Statement for 2026-08" in page
+    assert "Summer rent</td>" in page
+
+
+def test_profit_loss_opens_on_the_last_month_with_sales(client):
+    page = client.get("/sales/profit-loss").text          # the demo data only has sales in 2026-09
+    assert "Statement for 2026-09" in page
+    assert "€82,495.55" in page
+
+
+def test_month_without_data_says_so_and_can_be_navigated(client):
+    page = client.get("/sales/profit-loss?month=2026-07").text
+    assert "No data recorded for 2026-07" in page
+    assert 'href="/sales/profit-loss?month=2026-06"' in page            # previous month
+    assert 'href="/sales/profit-loss?month=2026-08"' in page            # next month
+
+
+def test_malformed_month_falls_back_to_the_default(client):
+    assert "Statement for 2026-09" in client.get("/sales/profit-loss?month=banana").text
+
+
+def test_history_lists_every_month_with_data(client):
+    client.post("/sales/profit-loss/expenses", data={"description": "Summer rent", "amount": "3200", "month": "2026-08"})
+    page = client.get("/sales/profit-loss?month=2026-09").text
+    assert "Month by month" in page
+    assert '<a class="link" href="/sales/profit-loss?month=2026-08">' in page
+    assert '<a class="link" href="/sales/profit-loss?month=2026-09">' in page
+    assert page.count("€82,495.55") >= 3      # the statement, its KPI card and September's row in the history
+
+
+# ---------- Names with special characters survive the redirect ----------
+
+def test_dish_name_with_an_ampersand_is_shown_whole(client):
+    response = client.post(
+        "/sales/dishes",
+        data={"name": "Mac & Cheese", "category": "main", "price": "12",
+              "ingredient_id": ["13"], "quantity": ["0.1"]},
+        follow_redirects=False,
+    )
+    assert response.headers["location"] == "/sales/dishes?added=Mac+%26+Cheese"
+    assert "Dish “Mac &amp; Cheese” added to the menu." in client.get(response.headers["location"]).text
+
+
+def test_supplier_name_with_an_ampersand_is_shown_whole(client):
+    response = client.post(
+        "/sales/inventory/suppliers",
+        data={"name": "Pérez & Hijos", "phone": "600000000", "email": "", "lead_time_days": "2"},
+        follow_redirects=False,
+    )
+    assert "Supplier “Pérez &amp; Hijos” added." in client.get(response.headers["location"]).text
+
+
+def test_ingredient_name_with_special_characters_is_shown_whole(client):
+    data = {**NEW_INGREDIENT, "name": "Salt & pepper #2"}
+    response = client.post("/sales/inventory/ingredients", data=data, follow_redirects=False)
+    page = client.get(response.headers["location"]).text
+    assert "Ingredient “Salt &amp; pepper #2” added and linked to Lácteos Sierra." in page
+
+
+def test_expense_name_with_an_ampersand_is_shown_whole(client):
+    response = client.post(
+        "/sales/profit-loss/expenses",
+        data={"description": "Gas & water", "amount": "300", "month": "2026-09"},
+        follow_redirects=False,
+    )
+    assert "Expense “Gas &amp; water” added." in client.get(response.headers["location"]).text
+
+
+
+# ---------- Wrong input gets a message on the page, never a crash or a silent save ----------
+
+def test_supplier_with_a_non_numeric_ingredient_gets_a_message_not_a_json_error(client):
+    response = client.post(
+        "/sales/inventory/suppliers",
+        data={"name": "Bodegas Rioja", "phone": "600000000", "email": "", "lead_time_days": "2",
+              "ingredient_ids": ["abc"]},
+    )
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("text/html")
+    assert "valid integer" in response.text
+
+
+def test_supplier_with_an_unknown_ingredient_is_not_saved(client):
+    response = client.post(
+        "/sales/inventory/suppliers",
+        data={"name": "Bodegas Rioja", "phone": "600000000", "email": "", "lead_time_days": "2",
+              "ingredient_ids": ["9999"]},
+    )
+    assert response.status_code == 422
+    assert "choose ingredients from the list" in response.text
+    assert "Bodegas Rioja</td>" not in client.get("/sales/inventory").text
+
+
+def test_supplier_name_already_in_use_is_rejected_whatever_the_case(client):
+    response = client.post(
+        "/sales/inventory/suppliers",
+        data={"name": "carnes martín", "phone": "600000000", "email": "", "lead_time_days": "2"},
+    )
+    assert response.status_code == 422
+    assert "already a supplier with that name" in response.text
+
+
+def test_renaming_a_supplier_to_another_suppliers_name_is_rejected(client):
+    taken = client.post("/sales/suppliers/2/edit",              # Carnes Martín -> Huerta de Madrid
+                        data={"name": "Huerta de Madrid", "phone": "600000000", "email": "", "lead_time_days": "2"})
+    assert taken.status_code == 422
+    assert "already a supplier with that name" in taken.text
+    same = client.post("/sales/suppliers/2/edit",               # keeping its own name is fine
+                       data={"name": "Carnes Martín", "phone": "600000000", "email": "", "lead_time_days": "3"},
+                       follow_redirects=False)
+    assert same.status_code == 303
+
+
+def test_new_ingredient_cannot_create_a_supplier_that_already_exists(client):
+    data = {**NEW_INGREDIENT, "supplier_choice": "new", "supplier_id": "", "new_supplier_name": "Lácteos Sierra",
+            "new_supplier_phone": "600000000", "new_supplier_lead_time": "2"}
+    response = client.post("/sales/inventory/ingredients", data=data)
+    assert response.status_code == 422
+    assert "that supplier already exists" in response.text

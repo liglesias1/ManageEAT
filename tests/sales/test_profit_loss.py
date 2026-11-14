@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from domains.sales.schemas import FixedExpenseIn
-from domains.sales.services import profit_and_loss
+from domains.sales.services import choose_month, month_history, profit_and_loss, shift_month
 
 DAILY = [
     {"day": "2026-09-01", "revenue": 1000.0, "ingredient_cost": 250.0},
@@ -76,3 +76,48 @@ def test_fixed_expense_validation():
         FixedExpenseIn(description="Rent", amount=100, month="September")
     with pytest.raises(ValidationError):
         FixedExpenseIn(description="Rent", amount=100, month="2026-13")
+
+
+# ---------- Months ----------
+
+def test_any_well_formed_month_can_be_asked_for_even_without_data():
+    assert choose_month(["2026-09"], "2026-08", "2026-09", "2026-10") == "2026-08"
+
+
+def test_a_malformed_month_falls_back_to_the_default():
+    assert choose_month(["2026-09"], "banana", "2026-09", "2026-10") == "2026-09"
+    assert choose_month(["2026-09"], "2026-13", "2026-09", "2026-10") == "2026-09"
+
+
+def test_default_is_the_current_month_when_it_has_data():
+    assert choose_month(["2026-09", "2026-10"], None, "2026-10", "2026-10") == "2026-10"
+
+
+def test_default_falls_back_to_the_last_month_with_sales():
+    # October only has a fixed expense so far: the last month with sales is still September
+    assert choose_month(["2026-09", "2026-11"], None, "2026-09", "2026-10") == "2026-09"
+
+
+def test_without_any_data_the_default_is_the_current_month():
+    assert choose_month(["2026-11"], None, None, "2026-10") == "2026-11"
+    assert choose_month([], None, None, "2026-10") == "2026-10"
+
+
+def test_shift_month_crosses_year_boundaries():
+    assert shift_month("2026-01", -1) == "2025-12"
+    assert shift_month("2026-12", 1) == "2027-01"
+    assert shift_month("2026-09", 0) == "2026-09"
+
+
+def test_history_has_one_row_per_month_newest_first_matching_each_statement():
+    daily = DAILY + [{"day": "2026-10-02", "revenue": 500.0, "ingredient_cost": 100.0}]
+    expenses = [{"description": "Rent", "amount": 3000.0, "month": "2026-09"},
+                {"description": "Rent", "amount": 3000.0, "month": "2026-10"},
+                {"description": "Rent", "amount": 3000.0, "month": "2026-11"}]   # November: rent only
+    history = month_history(daily, expenses, fake_labor_cost, ["2026-09", "2026-10", "2026-11"])
+
+    assert [h["month"] for h in history] == ["2026-11", "2026-10", "2026-09"]
+    september = profit_and_loss(DAILY, expenses[:1], fake_labor_cost, "2026-09-01", "2026-09-08")
+    assert history[2]["net_profit"] == september["net_profit"]
+    assert history[1]["revenue"] == 500
+    assert history[0]["revenue"] == 0 and history[0]["net_profit"] == -3000

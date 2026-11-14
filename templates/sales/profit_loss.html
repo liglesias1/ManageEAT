@@ -2,11 +2,23 @@
 {% block title %}Profit & loss{% endblock %}
 {% block heading %}Profit & loss{% endblock %}
 {% block intro %}
-What the restaurant earned in {{ month or "the period" }} once ingredients, wages and fixed costs are paid,
-with a week-by-week breakdown. Sales data from {{ start or "–" }} to {{ end or "–" }}.
+What the restaurant earned in {{ month }} once ingredients, wages and fixed costs are paid,
+with a week-by-week breakdown and the history of every month recorded.
+{% if start %}Sales data from {{ start }} to {{ end }}{% if in_progress %} (month in progress){% endif %}.{% endif %}
 {% endblock %}
 
 {% block content %}
+<nav class="month-nav">
+  <a class="month-step" href="/sales/profit-loss?month={{ prev_month }}">← {{ prev_month }}</a>
+  <form method="get" action="/sales/profit-loss" class="month-picker">
+    <label>Month <input type="month" name="month" value="{{ month }}" onchange="this.form.submit()"></label>
+    <noscript><button type="submit">Show</button></noscript>
+  </form>
+  {% if next_month %}<a class="month-step" href="/sales/profit-loss?month={{ next_month }}">{{ next_month }} →</a>{% endif %}
+  {% if in_progress %}<span class="badge new">Month in progress</span>{% endif %}
+</nav>
+
+{% if has_data %}
 <section class="kpis">
   <div class="kpi highlight">
     <div class="label">
@@ -62,9 +74,19 @@ with a week-by-week breakdown. Sales data from {{ start or "–" }} to {{ end or
   <section class="card">
     <h2>Week by week</h2>
     <p class="hint">Revenue against each cost. Fixed expenses are shared out by number of days.</p>
+    {% if pl.weeks %}
     <div class="chart-box"><canvas id="weeks-chart"></canvas></div>
+    {% else %}
+    <p class="muted">No sales recorded in this month yet, so there is no weekly breakdown.</p>
+    {% endif %}
   </section>
 </div>
+{% else %}
+<section class="card empty-month">
+  <h2>No data recorded for {{ month }}</h2>
+  <p class="hint">There are no sales and no fixed expenses for this month. Use the arrows to move to another month, or add a fixed expense below.</p>
+</section>
+{% endif %}
 
 <div class="split">
   <section class="card" id="new-expense">
@@ -105,10 +127,38 @@ with a week-by-week breakdown. Sales data from {{ start or "–" }} to {{ end or
   </section>
 </div>
 
+{% if history %}
+<section class="card">
+  <h2>Month by month</h2>
+  <p class="hint">Every month with recorded data, newest first. Choose a month to see its full statement.</p>
+  <div class="chart-box small"><canvas id="history-chart"></canvas></div>
+  <table>
+    <thead>
+      <tr><th>Month</th><th class="num">Revenue</th><th class="num">Ingredients</th><th class="num">Wages</th>
+          <th class="num">Fixed</th><th class="num">Net profit</th><th class="num">Margin</th></tr>
+    </thead>
+    <tbody>
+      {% for h in history %}
+      <tr class="{{ 'selected' if h.month == month else '' }}">
+        <td><a class="link" href="/sales/profit-loss?month={{ h.month }}">{{ h.month }}</a></td>
+        <td class="num">{{ h.revenue | eur }}</td>
+        <td class="num">{{ h.ingredients | eur }}</td>
+        <td class="num">{{ h.labor | eur }}</td>
+        <td class="num">{{ h.fixed | eur }}</td>
+        <td class="num">{{ h.net_profit | eur }}</td>
+        <td class="num">{{ "%.1f" | format(h.net_margin_pct) }}%</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 <script>
   const weeks = {{ pl.weeks | tojson }};
   const label = (w) => w.start.slice(8) + "–" + w.end.slice(8) + " " + new Date(w.start).toLocaleString("en", { month: "short" });
-  new Chart(document.getElementById("weeks-chart"), {
+  const weeksCanvas = document.getElementById("weeks-chart");
+  if (weeksCanvas) new Chart(weeksCanvas, {
     data: {
       labels: weeks.map(label),
       datasets: [
@@ -128,6 +178,23 @@ with a week-by-week breakdown. Sales data from {{ start or "–" }} to {{ end or
         x: { stacked: true },
         y: { stacked: true, ticks: { callback: (v) => "€" + v.toLocaleString() } },
       },
+    },
+  });
+
+  const monthHistory = {{ history | tojson }}.slice().reverse();   // oldest first, left to right
+  const historyCanvas = document.getElementById("history-chart");
+  if (historyCanvas) new Chart(historyCanvas, {
+    type: "bar",
+    data: {
+      labels: monthHistory.map(h => h.month),
+      datasets: [{ label: "Net profit", data: monthHistory.map(h => h.net_profit),
+                   backgroundColor: monthHistory.map(h => h.net_profit < 0 ? "#a3392e" : "#7d2633") }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+                 tooltip: { callbacks: { label: (c) => `Net profit: €${Math.round(c.raw).toLocaleString()}` } } },
+      scales: { y: { ticks: { callback: (v) => "€" + v.toLocaleString() } } },
     },
   });
 </script>

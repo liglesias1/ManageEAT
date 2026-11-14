@@ -48,16 +48,16 @@ def test_payroll_groups_by_role():
 
 
 def test_labor_cost_only_counts_the_period(conn):
-    seed_personnel_if_empty(conn)   # employee 1 is a waiter at 11.50 per hour
-    conn.execute("INSERT INTO clock_ins (employee_id, clock_in, clock_out) VALUES (1, '2026-09-01T12:00:00', '2026-09-01T16:00:00')")
-    conn.execute("INSERT INTO clock_ins (employee_id, clock_in, clock_out) VALUES (1, '2026-10-01T12:00:00', '2026-10-01T16:00:00')")
-    assert labor_cost(conn, "2026-09-01", "2026-09-30") == 46.0          # only September: 4 h * 11.50
-    assert labor_cost(conn, "2026-11-01", "2026-11-30") == 0
+    seed_personnel_if_empty(conn, 1)   # employee 1 is a waiter at 11.50 per hour
+    conn.execute("INSERT INTO clock_ins (restaurant_id, employee_id, clock_in, clock_out) VALUES (1, 1, '2026-09-01T12:00:00', '2026-09-01T16:00:00')")
+    conn.execute("INSERT INTO clock_ins (restaurant_id, employee_id, clock_in, clock_out) VALUES (1, 1, '2026-10-01T12:00:00', '2026-10-01T16:00:00')")
+    assert labor_cost(conn, 1, "2026-09-01", "2026-09-30") == 46.0          # only September: 4 h * 11.50
+    assert labor_cost(conn, 1, "2026-11-01", "2026-11-30") == 0
 
 
 def test_clock_in_period(conn):
     from domains.personnel.repository import get_clock_in_period
 
-    conn.execute("INSERT INTO clock_ins (employee_id, clock_in, clock_out) VALUES (1, '2026-09-03T12:00:00', '2026-09-03T16:00:00')")
-    conn.execute("INSERT INTO clock_ins (employee_id, clock_in, clock_out) VALUES (1, '2026-09-20T12:00:00', '2026-09-20T16:00:00')")
-    assert get_clock_in_period(conn) == ("2026-09-03", "2026-09-20")
+    conn.execute("INSERT INTO clock_ins (restaurant_id, employee_id, clock_in, clock_out) VALUES (1, 1, '2026-09-03T12:00:00', '2026-09-03T16:00:00')")
+    conn.execute("INSERT INTO clock_ins (restaurant_id, employee_id, clock_in, clock_out) VALUES (1, 1, '2026-09-20T12:00:00', '2026-09-20T16:00:00')")
+    assert get_clock_in_period(conn, 1) == ("2026-09-03", "2026-09-20")

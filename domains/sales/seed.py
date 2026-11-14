@@ -80,14 +80,16 @@ FIXED_EXPENSES = [
 ]
 
 
-def seed_sales_if_empty(conn):
-    """Loads the demo reference data, only on a brand-new database."""
-    if conn.execute("SELECT COUNT(*) FROM suppliers").fetchone()[0] > 0:
+def seed_sales_if_empty(conn, restaurant_id):
+    """Loads the demo reference data into a restaurant that has no suppliers yet."""
+    if conn.execute("SELECT COUNT(*) FROM suppliers WHERE restaurant_id = ?", (restaurant_id,)).fetchone()[0] > 0:
         return
-    conn.executemany("INSERT INTO suppliers VALUES (?, ?, ?, ?, ?)", SUPPLIERS)
-    conn.executemany("INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?)", INGREDIENTS)
-    conn.executemany("INSERT INTO menu_items VALUES (?, ?, ?, ?)", MENU_ITEMS)
-    conn.executemany("INSERT INTO recipes VALUES (?, ?, ?)", RECIPES)
+    conn.executemany("INSERT INTO suppliers VALUES (?, ?, ?, ?, ?, ?)",
+                     [(s[0], restaurant_id, *s[1:]) for s in SUPPLIERS])
+    conn.executemany("INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     [(i[0], restaurant_id, *i[1:]) for i in INGREDIENTS])
+    conn.executemany("INSERT INTO menu_items VALUES (?, ?, ?, ?, ?)", [(restaurant_id, *m) for m in MENU_ITEMS])
+    conn.executemany("INSERT INTO recipes VALUES (?, ?, ?, ?)", [(restaurant_id, *r) for r in RECIPES])
     conn.executemany(
         "INSERT INTO purchases (supplier_id, ingredient_id, quantity, unit_price, received_on) VALUES (?, ?, ?, ?, ?)",
         [
@@ -97,6 +99,7 @@ def seed_sales_if_empty(conn):
         ],
     )
     conn.executemany(
-        "INSERT INTO fixed_expenses (description, amount, month) VALUES (?, ?, ?)", FIXED_EXPENSES
+        "INSERT INTO fixed_expenses (restaurant_id, description, amount, month) VALUES (?, ?, ?, ?)",
+        [(restaurant_id, *e) for e in FIXED_EXPENSES],
     )
     conn.commit()

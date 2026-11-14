@@ -4,6 +4,10 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+# The menu categories, in the order the pages show them. Defined only here: the form, the validation and
+# the CHECK constraint of menu_items (tables.py) all read this tuple.
+CATEGORIES = ("main", "starter", "dessert", "drink")
+
 
 class SupplierIn(BaseModel):
     """A new supplier sent from the inventory form."""
@@ -72,9 +76,9 @@ class DishIn(BaseModel):
     """A new dish added from the menu page, with its recipe."""
 
     name: str = Field(min_length=2, max_length=60)
-    category: Literal["starter", "main", "dessert", "drink"]
+    category: Literal[CATEGORIES]
     price: float = Field(gt=0, le=500)
-    recipe: List[RecipeLineIn] = Field(min_length=1)
+    recipe: List[RecipeLineIn]
 
     @field_validator("name", mode="before")
     @classmethod
@@ -83,7 +87,10 @@ class DishIn(BaseModel):
 
     @field_validator("recipe")
     @classmethod
-    def no_repeated_ingredients(cls, recipe):
+    def valid_recipe(cls, recipe):
+        """At least one ingredient, and each ingredient only once."""
+        if not recipe:
+            raise ValueError("add at least one ingredient")
         ids = [line.ingredient_id for line in recipe]
         if len(ids) != len(set(ids)):
             raise ValueError("each ingredient can only appear once in a recipe")

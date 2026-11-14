@@ -1,11 +1,18 @@
 """Punto de entrada de la web: el archivo principal que se ejecuta para que arranque la app. Start with: python app.py"""
 from contextlib import asynccontextmanager
+from urllib.parse import urlencode
 
 import uvicorn  # the server that runs the FastAPI application
 from fastapi import FastAPI  # the web framework that creates the endpoints and handles requests and responses
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 import config
+from accounts.dependencies import LoginRequired
+from accounts.routes import router as accounts_router
+from accounts.seed import seed_demo_restaurant
+from accounts.tables import ACCOUNTS_SCHEMA
 from database import get_connection, init_db
 from domains.personnel.routes import router as personnel_router  # se renombran porque los dos routers se llaman "router" y chocarían
 from domains.personnel.seed import seed_personnel_if_empty
@@ -23,17 +30,31 @@ async def lifespan(app):
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = get_connection()
     try:
-        init_db(conn, [INPUT_SCHEMA, SALES_SCHEMA, PERSONNEL_SCHEMA])
+        init_db(conn, [ACCOUNTS_SCHEMA, INPUT_SCHEMA, SALES_SCHEMA, PERSONNEL_SCHEMA])
         if config.SEED_DEMO_DATA:
-            seed_if_empty(conn)
-            seed_sales_if_empty(conn)
-            seed_personnel_if_empty(conn)
+            # The demo account owns the demo data; restaurants that register later start empty
+            demo = seed_demo_restaurant(conn)
+            seed_if_empty(conn, demo)
+            seed_sales_if_empty(conn, demo)
+            seed_personnel_if_empty(conn, demo)
     finally:
         conn.close()
     yield
 
 
 app = FastAPI(title="ManageEAT", lifespan=lifespan)
+# The login is kept in a cookie signed with SECRET_KEY: the browser can read it but cannot change it.
+# same_site="lax" stops other websites from sending the cookie with their forms.
+app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY, same_site="lax", max_age=60 * 60 * 12)
+
+
+@app.exception_handler(LoginRequired)
+def send_to_login(request, error):
+    """Any page that needs a manager sends anonymous visitors to the login, and back after logging in."""
+    return RedirectResponse(f"/login?{urlencode({'next': error.path})}", status_code=303)
+
+
+app.include_router(accounts_router)
 app.include_router(overview_router)
 app.include_router(sales_router)
 app.include_router(personnel_router)

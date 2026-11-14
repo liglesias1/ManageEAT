@@ -44,6 +44,15 @@
         Payroll
       </a>
     </nav>
+
+    {% if request.session.get("user_id") %}
+    <div class="account">
+      <p class="account-restaurant">{{ request.session.get("restaurant_name") }}</p>
+      <p class="account-user">{{ request.session.get("user_name") }}</p>
+      <a href="/account/managers" class="{{ 'active' if path == '/account/managers' else '' }}">Managers</a>
+      <form method="post" action="/logout"><button type="submit">Log out</button></form>
+    </div>
+    {% endif %}
   </aside>
 
   <main class="content">
