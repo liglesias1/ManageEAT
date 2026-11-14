@@ -38,11 +38,12 @@ Consequences: Left thinner on purpose: the JavaScript in the templates (charts, 
 
 ## 5. Not built: restaurant accounts (register a restaurant and log in)
 Date: 2026-10-04
-Status: Decided
+Status: Superseded by [6]
 Context: A natural next step is to let any restaurant register, log in and see only its own data, but the current version serves one restaurant whose orders and clock-ins come from its own systems.
 Decision: The app has no registration, login or users, and holds the data of a single restaurant.
 Alternatives considered: Restaurant accounts were considered, but every table would need a restaurant_id column and every query a filter on it, where one missed filter would show a restaurant another's data, and a newly registered restaurant would see empty pages until its POS and clock-in data were connected. A simpler login with several users of the same restaurant was also rejected because, in a single-user local deployment, it protects nothing extra.
 Consequences: Anyone who can reach the app can see and change everything, so accounts must be added before it is exposed publicly in the Azure deployment of Assignment 2. Keeping restaurant data in tables owned by each domain means a restaurant_id can later be added domain by domain without changing the seam between them.
+
 
 ## 6. The split: sales and personnel as two services, with accounts in personnel
 Date: 2026-11-14
