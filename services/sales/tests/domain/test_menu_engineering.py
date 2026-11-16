@@ -1,4 +1,4 @@
-from domains.sales.services import classify_menu, menu_summary
+from domain.services import classify_menu, menu_summary
 
 
 def dish(code, units, revenue, cost, category="main"):

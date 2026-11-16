@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from domains.sales.schemas import IngredientIn, PurchaseIn, SupplierIn
-from domains.sales.services import inventory_summary, stock_status, supplier_summary
+from domain.schemas import IngredientIn, PurchaseIn, SupplierIn
+from domain.services import inventory_summary, stock_status, supplier_summary
 
 
 def ingredient(name="Rice", counted=100, used=0, reorder=10, lead=2, cost=2.0, counted_at="2026-09-21"):

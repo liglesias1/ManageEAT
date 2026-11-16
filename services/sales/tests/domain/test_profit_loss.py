@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from domains.sales.schemas import FixedExpenseIn
-from domains.sales.services import choose_month, month_history, profit_and_loss, shift_month
+from domain.schemas import FixedExpenseIn
+from domain.services import choose_month, month_history, profit_and_loss, shift_month
 
 DAILY = [
     {"day": "2026-09-01", "revenue": 1000.0, "ingredient_cost": 250.0},
@@ -121,3 +121,20 @@ def test_history_has_one_row_per_month_newest_first_matching_each_statement():
     assert history[2]["net_profit"] == september["net_profit"]
     assert history[1]["revenue"] == 500
     assert history[0]["revenue"] == 0 and history[0]["net_profit"] == -3000
+
+# ---------- When the personnel service does not answer ----------
+
+def test_without_wages_blanks_every_figure_that_depends_on_them():
+    from domain.services import without_wages
+
+    statement = profit_and_loss(
+        [{"day": "2026-09-01", "revenue": 1000.0, "ingredient_cost": 300.0}],
+        [{"amount": 300.0}], lambda start, end: 0.0, "2026-09-01", "2026-09-01",
+    )
+    blanked = without_wages(statement)
+    assert (blanked["revenue"], blanked["ingredients"], blanked["gross_profit"], blanked["fixed"]) == \
+        (1000.0, 300.0, 700.0, 300.0)
+    for key in ("labor", "labor_pct", "net_profit", "net_margin_pct"):
+        assert blanked[key] is None
+    assert blanked["weeks"][0]["labor"] is None and blanked["weeks"][0]["profit"] is None
+    assert blanked["weeks"][0]["revenue"] == 1000.0

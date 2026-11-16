@@ -1,12 +1,11 @@
-"""The rules of the sales forms: limits of each field, the business rules in services, and the messages."""
+"""The rules of the sales forms: limits of each field and the business rules in services."""
 import sqlite3
 
 import pytest
 from pydantic import ValidationError
 
-from domains.sales import services
-from domains.sales.schemas import CATEGORIES, DishIn, FixedExpenseIn, IngredientIn, PurchaseIn, SupplierIn
-from web import form_errors
+from domain import services
+from domain.schemas import CATEGORIES, DishIn, FixedExpenseIn, IngredientIn, PurchaseIn, SupplierIn
 
 LINE = [{"ingredient_id": 1, "quantity": 1}]
 INGREDIENT = {"name": "Mascarpone", "unit": "kg", "unit_cost": 9, "counted_stock": 0, "reorder_level": 0,
@@ -117,19 +116,3 @@ def test_a_supplier_only_delivers_what_it_sells():
     purchase = PurchaseIn(ingredient_id=5, quantity=1, unit_price=1, received_on="2026-09-01")
     assert services.purchase_problem(purchase, {1, 2}) == "This supplier does not sell that product"
     assert services.purchase_problem(purchase, {5}) is None
-
-
-# ---------- One way to write form errors ----------
-
-def test_form_errors_name_the_field_without_list_positions():
-    with pytest.raises(ValidationError) as error:
-        DishIn(name="Flan", category="dessert", price=5, recipe=[{"ingredient_id": 1, "quantity": 0}])
-    assert form_errors(error.value) == ["Recipe quantity: input should be greater than 0"]
-    assert form_errors(error.value, {"recipe quantity": "Ingredient quantity"}) == \
-        ["Ingredient quantity: input should be greater than 0"]
-
-
-def test_errors_of_the_whole_form_have_no_field():
-    with pytest.raises(ValidationError) as error:
-        SupplierIn(name="Makro", lead_time_days=1)
-    assert form_errors(error.value) == ["Add a phone number or an email"]

@@ -348,3 +348,21 @@ def purchase_problem(purchase, ingredient_ids_of_supplier):
     if purchase.ingredient_id not in ingredient_ids_of_supplier:
         return "This supplier does not sell that product"
     return None
+
+# ---------- When the personnel service does not answer ----------
+
+# Every figure of a statement, a week or a month of the history that is calculated with wages
+DEPENDS_ON_WAGES = ("labor", "labor_pct", "profit", "net_profit", "net_margin_pct")
+
+
+def without_wages(statement):
+    """The same statement with every figure that depends on wages set to None (ADR-6).
+
+    When personnel does not answer, the statement is calculated with zero wages and then passed through
+    this function, so no profit is ever shown that silently leaves the wages out. Revenue, ingredients
+    and fixed costs, which only come from sales, are kept.
+    """
+    blanked = {key: (None if key in DEPENDS_ON_WAGES else value) for key, value in statement.items()}
+    if "weeks" in statement:
+        blanked["weeks"] = [without_wages(week) for week in statement["weeks"]]
+    return blanked

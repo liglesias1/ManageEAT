@@ -387,3 +387,57 @@ def get_all_fixed_expenses(conn, restaurant_id):
         (restaurant_id,),
     ).fetchall()
     return [dict(row) for row in rows]
+
+# ---------- Demand: what the personnel service asks for ----------
+
+def get_covers_by_hour(conn, restaurant_id):
+    """Total diners per day and hour, from the orders recorded by the POS."""
+    rows = conn.execute(
+        """
+        SELECT date(created_at)                            AS day,
+               CAST(strftime('%H', created_at) AS INTEGER) AS hour,
+               SUM(covers)                                 AS covers
+          FROM orders
+         WHERE restaurant_id = ?
+         GROUP BY day, hour
+         ORDER BY day, hour
+        """,
+        (restaurant_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_open_days(conn, restaurant_id):
+    """Every day the restaurant registered at least one order, as 'YYYY-MM-DD'."""
+    rows = conn.execute(
+        "SELECT DISTINCT date(created_at) AS day FROM orders WHERE restaurant_id = ? ORDER BY day", (restaurant_id,)
+    ).fetchall()
+    return [row["day"] for row in rows]
+
+
+
+# ---------- Last wage costs received from personnel ----------
+
+def save_labor_cost(conn, restaurant_id, start, end, labor_cost, fetched_at):
+    """Keeps the wage cost personnel just gave for a period, replacing the previous copy of that period."""
+    conn.execute(
+        """
+        INSERT INTO labor_cost_snapshots (restaurant_id, period_start, period_end, labor_cost, fetched_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (restaurant_id, period_start, period_end)
+        DO UPDATE SET labor_cost = excluded.labor_cost, fetched_at = excluded.fetched_at
+        """,
+        (restaurant_id, start, end, labor_cost, fetched_at),
+    )
+    conn.commit()
+
+def get_labor_cost_snapshot(conn, restaurant_id, start, end):
+    """The last wage cost received for a period and when it was received, as (cost, fetched_at), or None."""
+    row = conn.execute(
+        """
+        SELECT labor_cost, fetched_at FROM labor_cost_snapshots
+         WHERE restaurant_id = ? AND period_start = ? AND period_end = ?
+        """,
+        (restaurant_id, start, end),
+    ).fetchone()
+    return (row["labor_cost"], row["fetched_at"]) if row else None

@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from domains.sales.repository import (
+from domain.repository import (
     add_fixed_expense,
     add_purchase,
     add_supplier,
@@ -22,7 +22,7 @@ from domains.sales.repository import (
     get_suppliers,
 )
 
-from domains.sales.seed import seed_sales_if_empty
+from domain.seed import seed_sales_if_empty
 
 R = 1        # the restaurant most tests work with
 OTHER = 2    # a second restaurant, to check that data never leaks between them

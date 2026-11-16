@@ -2,9 +2,9 @@
 import pytest
 from pydantic import ValidationError
 
-from domains.sales.repository import add_dish, get_menu, get_recipe_lines
-from domains.sales.schemas import DishIn
-from domains.sales.services import FOOD_COST_TARGET, cost_dishes, dishes_summary, new_dish_code
+from domain.repository import add_dish, get_menu, get_recipe_lines
+from domain.schemas import DishIn
+from domain.services import FOOD_COST_TARGET, cost_dishes, dishes_summary, new_dish_code
 
 
 def line(item_code, ingredient, quantity, unit_cost):

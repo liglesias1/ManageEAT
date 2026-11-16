@@ -1,4 +1,11 @@
-"""Demo reference data for the sales domain: suppliers, ingredients, menu and recipes."""
+"""Demo data for the sales service: suppliers, ingredients, menu, recipes, and the orders the POS would record.
+
+The order generator used to live in ingestion/seed.py next to the clock-ins. Seed data moves with its
+table, so it is now here, with its own random generator with a fixed seed: every start produces the same
+orders, and they do not depend on how personnel generates its clock-ins.
+"""
+import random
+from datetime import date, datetime, timedelta
 
 # id, name, phone, email, lead_time_days
 SUPPLIERS = [
@@ -79,9 +86,76 @@ FIXED_EXPENSES = [
     ("Cleaning service", 400.00, "2026-09"),
 ]
 
+# How often each dish is chosen within its category (higher = more popular)
+POPULARITY = {
+    "SAL01": 3, "CRO01": 5, "GAZ01": 2,
+    "PAE01": 6, "SOL01": 2, "ENT01": 3, "HAM01": 5, "RIS01": 1.5,
+    "TAR01": 3, "FLA01": 2,
+    "AGU01": 4, "VIN01": 3, "CER01": 4,
+}
+
+# Relative weight of orders at each opening hour (lunch 13-15h, dinner 20-23h)
+HOURLY_WEIGHT = {13: 3, 14: 6, 15: 3, 20: 2, 21: 6, 22: 5, 23: 1}
+
+# Same period as the demo clock-ins of the personnel service, so sales and wages cover the same days
+DEMO_START = date(2026, 9, 1)
+DEMO_DAYS = 28
+
+PRICES = {code: price for code, _, _, price in MENU_ITEMS}
+
+
+def _pick(rng, category):
+    """Chooses a dish of the category, favouring the most popular ones."""
+    dishes = [code for code, _, cat, _ in MENU_ITEMS if cat == category]
+    return rng.choices(dishes, [POPULARITY[code] for code in dishes])[0]
+
+
+def _orders_for_day(rng, day):
+    """Returns a list of (order_datetime, covers, items) for one day."""
+    weekend = day.weekday() >= 4  # Friday to Sunday are busier
+    total_orders = rng.randint(55, 75) if weekend else rng.randint(30, 45)
+    hours = list(HOURLY_WEIGHT)
+    weights = list(HOURLY_WEIGHT.values())
+
+    orders = []
+    for _ in range(total_orders):
+        hour = rng.choices(hours, weights)[0]
+        when = datetime(day.year, day.month, day.day, hour, rng.randint(0, 59))
+        covers = rng.randint(1, 6)
+        items = {}
+        for _ in range(covers):
+            picks = [_pick(rng, "main"), _pick(rng, "drink")]
+            if rng.random() < 0.5:
+                picks.append(_pick(rng, "starter"))
+            if rng.random() < 0.4:
+                picks.append(_pick(rng, "dessert"))
+            for code in picks:
+                items[code] = items.get(code, 0) + 1
+        orders.append((when, covers, items))
+    return orders
+
+
+def generate_orders(conn, restaurant_id, start=DEMO_START, days=DEMO_DAYS, seed=42):
+    """Fills the orders of one restaurant with `days` days of POS data."""
+    rng = random.Random(seed)
+    for offset in range(days):
+        day = start + timedelta(days=offset)
+        for when, covers, items in _orders_for_day(rng, day):
+            order_id = conn.execute(
+                "INSERT INTO orders (restaurant_id, table_no, covers, created_at) VALUES (?, ?, ?, ?)",
+                (restaurant_id, rng.randint(1, 20), covers, when.isoformat()),
+            ).lastrowid
+            conn.executemany(
+                "INSERT INTO order_items (order_id, item_code, quantity, unit_price) VALUES (?, ?, ?, ?)",
+                [(order_id, code, qty, PRICES[code]) for code, qty in items.items()],
+            )
+
 
 def seed_sales_if_empty(conn, restaurant_id):
-    """Loads the demo reference data into a restaurant that has no suppliers yet."""
+    """Loads the demo data into a restaurant that has no suppliers yet.
+
+    Checking first makes it idempotent: restarting the service never duplicates the demo data.
+    """
     if conn.execute("SELECT COUNT(*) FROM suppliers WHERE restaurant_id = ?", (restaurant_id,)).fetchone()[0] > 0:
         return
     conn.executemany("INSERT INTO suppliers VALUES (?, ?, ?, ?, ?, ?)",
@@ -102,4 +176,5 @@ def seed_sales_if_empty(conn, restaurant_id):
         "INSERT INTO fixed_expenses (restaurant_id, description, amount, month) VALUES (?, ?, ?, ?)",
         [(restaurant_id, *e) for e in FIXED_EXPENSES],
     )
+    generate_orders(conn, restaurant_id)
     conn.commit()
