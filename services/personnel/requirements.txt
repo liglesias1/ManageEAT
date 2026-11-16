@@ -1,0 +1,4 @@
+# What the personnel service needs to run. Exact versions, so every build installs the same thing.
+fastapi==0.128.8      # web framework: endpoints, validation, OpenAPI document
+uvicorn==0.39.0       # server that runs the FastAPI app
+PyJWT==2.15.1         # signs and checks the login tokens (ADR-6)

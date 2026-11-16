@@ -1,32 +1,35 @@
-"""Who is logged in, and which restaurant the current request belongs to.
+"""Who is making the request, and which restaurant it belongs to.
 
-Every page asks for its restaurant with `restaurant_id: int = Depends(current_restaurant)` and passes
-it to the repositories, so every query only sees that restaurant's rows. If nobody is logged in,
-LoginRequired is raised and app.py sends the browser to the login page.
+Every endpoint that needs a manager asks for `restaurant_id: int = Depends(current_restaurant)` (or
+`user = Depends(current_user)`). The token comes in the header `Authorization: Bearer <token>`. Personnel
+owns the users table, so besides checking the token it looks the manager up on every request: a removed
+manager is refused at once, as in the monolith (ADR-6).
 """
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from accounts import repository
+from accounts.tokens import read_token
 from database import get_db
 
-
-class LoginRequired(Exception):
-    """Raised when a page needs a logged-in manager; `path` is where to return after logging in."""
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.path = path
+# auto_error=False: a missing header reaches current_user, which answers 401 with the same shape as a bad token
+bearer = HTTPBearer(auto_error=False)
 
 
-def current_user(request: Request, conn=Depends(get_db)):
-    """The logged-in manager, read from the signed session cookie."""
-    user_id = request.session.get("user_id")
-    if user_id is None:
-        raise LoginRequired(request.url.path)
-    user = repository.get_user(conn, user_id)
-    if user is None:                      # the account was removed after logging in
-        request.session.clear()
-        raise LoginRequired(request.url.path)
+def _unauthorized(detail):
+    return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
+
+
+def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer), conn=Depends(get_db)):
+    """The logged-in manager, or 401 if the token is missing, invalid or expired, or the account is gone."""
+    if credentials is None:
+        raise _unauthorized("Log in first")
+    claims = read_token(credentials.credentials)
+    if claims is None:
+        raise _unauthorized("The session has expired or is not valid; log in again")
+    user = repository.get_user(conn, int(claims["sub"]))
+    if user is None:
+        raise _unauthorized("This account no longer exists")
     return user
 
 

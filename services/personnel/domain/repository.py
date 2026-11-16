@@ -1,31 +1,10 @@
 """SQL queries of the personnel domain. Only reads and writes data, no calculations.
 
+Demand (covers per hour and open days) is not here: orders belong to the sales service, and personnel
+asks sales for them over HTTP (ADR-6).
+
 Every function takes the restaurant_id and only reads that restaurant's rows.
 """
-
-
-def get_covers_by_hour(conn, restaurant_id):
-    """Total diners per day and hour, from the orders recorded by the POS."""
-    rows = conn.execute(
-        """
-        SELECT date(created_at)                          AS day,
-               CAST(strftime('%H', created_at) AS INTEGER) AS hour,
-               SUM(covers)                               AS covers
-          FROM orders
-         WHERE restaurant_id = ?
-         GROUP BY day, hour
-        """,
-        (restaurant_id,),
-    ).fetchall()
-    return [dict(row) for row in rows]
-
-
-def get_open_days(conn, restaurant_id):
-    """Every day the restaurant registered at least one order, as 'YYYY-MM-DD'."""
-    rows = conn.execute(
-        "SELECT DISTINCT date(created_at) AS day FROM orders WHERE restaurant_id = ? ORDER BY day", (restaurant_id,)
-    ).fetchall()
-    return [row["day"] for row in rows]
 
 
 def get_roles(conn, restaurant_id):
@@ -52,7 +31,6 @@ def get_shifts(conn, restaurant_id):
         (restaurant_id,),
     ).fetchall()
     return [dict(row) for row in rows]
-
 
 
 def get_worked_shifts(conn, restaurant_id, start, end):

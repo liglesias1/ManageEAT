@@ -1,6 +1,6 @@
 import pytest
 
-from domains.personnel.services import (
+from domain.services import (
     average_demand,
     average_staff_on_shift,
     build_schedule,

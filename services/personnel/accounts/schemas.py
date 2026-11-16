@@ -47,3 +47,24 @@ class RegisterIn(ManagerIn):
     @classmethod
     def strip_restaurant(cls, value):
         return _clean(value)
+
+# ---------- What the API answers ----------
+
+class ManagerOut(BaseModel):
+    id: int
+    name: str
+    email: str
+
+
+class RestaurantOut(BaseModel):
+    id: int
+    name: str
+
+
+class SessionOut(BaseModel):
+    """Answer to login, register and refresh: the token the UI sends with every request, and who it belongs to."""
+
+    token: str
+    expires_in: int = Field(description="Seconds until the token expires")
+    user: ManagerOut
+    restaurant: RestaurantOut

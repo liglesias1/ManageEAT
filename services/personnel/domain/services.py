@@ -3,7 +3,7 @@ import math
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 
-from domains.personnel import repository
+from domain import repository
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 

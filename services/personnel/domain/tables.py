@@ -1,4 +1,9 @@
-"""SQL that creates the tables owned by the personnel domain (roles, employees), for every restaurant."""
+"""SQL that creates the tables owned by the personnel service: roles, employees and clock-ins, for every restaurant.
+
+clock_ins used to be shared input read by both domains (ADR-3); since the split only personnel reads it,
+so it belongs here (ADR-6). employee_id is not a foreign key because the clock-in system that writes it
+is outside ManageEAT, as it was in the monolith.
+"""
 
 PERSONNEL_SCHEMA = """
 CREATE TABLE IF NOT EXISTS roles (
@@ -17,4 +22,15 @@ CREATE TABLE IF NOT EXISTS employees (
     name           TEXT    NOT NULL,
     role_id        INTEGER NOT NULL REFERENCES roles(id)
 );
+
+CREATE TABLE IF NOT EXISTS clock_ins (
+    id             INTEGER PRIMARY KEY,
+    restaurant_id  INTEGER NOT NULL,
+    employee_id    INTEGER NOT NULL,
+    clock_in       TEXT    NOT NULL,
+    clock_out      TEXT    NOT NULL
+);
+
+-- Payroll and labor cost filter by restaurant and date
+CREATE INDEX IF NOT EXISTS clock_ins_by_restaurant ON clock_ins (restaurant_id, clock_in);
 """

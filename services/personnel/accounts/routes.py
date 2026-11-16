@@ -1,142 +1,77 @@
-"""Pages to register a restaurant, log in and out, and add more managers to a restaurant."""
-from urllib.parse import urlencode
+"""Accounts API: register a restaurant, log in, renew the token, and manage the restaurant's managers.
 
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import ValidationError
+There is no logout endpoint: the token lives in the browser, so logging out is the UI forgetting it.
+A forgotten token still works until it expires (at most TOKEN_MINUTES), which ADR-6 accepts.
+"""
+from fastapi import APIRouter, Depends, HTTPException
 
+import config
 from accounts import repository, services
 from accounts.dependencies import current_user
-from accounts.schemas import MIN_PASSWORD_LENGTH, LoginIn, ManagerIn, RegisterIn
+from accounts.schemas import LoginIn, ManagerIn, ManagerOut, RegisterIn, SessionOut
+from accounts.tokens import create_token
 from database import get_db
-from web import form_errors, templates
 
 router = APIRouter(tags=["accounts"])
 
-EMAIL_TAKEN = "Email: there is already an account with that email"
+EMAIL_TAKEN = "There is already an account with that email"
+WRONG_LOGIN = "The email or the password is not correct"
 
 
-def _safe_next(next_path):
-    """Only return to a page of this site: '/sales/menu' yes, 'https://evil.com' or '//evil.com' no."""
-    if next_path and next_path.startswith("/") and not next_path.startswith("//"):
-        return next_path
-    return "/"
+def _session(user):
+    """Token plus who it belongs to; `user` is a row from accounts.repository (with the restaurant's name)."""
+    return {
+        "token": create_token(user),
+        "expires_in": config.TOKEN_MINUTES * 60,
+        "user": {"id": user["id"], "name": user["name"], "email": user["email"]},
+        "restaurant": {"id": user["restaurant_id"], "name": user["restaurant"]},
+    }
 
 
-def _log_in(request, user):
-    """Starts a new session for this manager. Clearing it first means an old session is never reused.
-
-    The names are kept only to show who is logged in; every page reads the account again by user_id.
-    """
-    request.session.clear()
-    request.session["user_id"] = user["id"]
-    request.session["user_name"] = user["name"]
-    request.session["restaurant_name"] = user["restaurant"]
-
-
-# ---------- Log in and out ----------
-
-@router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, next: str = "/"):
-    if request.session.get("user_id"):
-        return RedirectResponse(_safe_next(next), status_code=303)
-    return templates.TemplateResponse(request, "accounts/login.html", {"next": next, "form": {}, "errors": []})
-
-
-@router.post("/login", response_class=HTMLResponse)
-def login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("/"),
-          conn=Depends(get_db)):
-    try:
-        credentials = LoginIn(email=email, password=password)
-        user = services.authenticate(conn, credentials.email, credentials.password)
-    except ValidationError:
-        user = None
+@router.post("/auth/login", response_model=SessionOut)
+def login(credentials: LoginIn, conn=Depends(get_db)):
+    user = services.authenticate(conn, credentials.email, credentials.password)
     if user is None:
-        # One message for every failure, so the page never tells which emails have an account
-        return templates.TemplateResponse(
-            request, "accounts/login.html",
-            {"next": next, "form": {"email": email}, "errors": ["The email or the password is not correct"]},
-            status_code=401,
-        )
-    _log_in(request, user)
-    return RedirectResponse(_safe_next(next), status_code=303)
+        # One message for an unknown email and a wrong password, so the API never tells which emails exist
+        raise HTTPException(status_code=401, detail=WRONG_LOGIN)
+    return _session(user)
 
 
-@router.post("/logout")
-def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/login", status_code=303)
-
-
-# ---------- Register a new restaurant ----------
-
-def _register_page(request, form=None, errors=None, status_code=200):
-    return templates.TemplateResponse(
-        request, "accounts/register.html",
-        {"form": form or {}, "errors": errors or [], "min_password": MIN_PASSWORD_LENGTH}, status_code=status_code,
-    )
-
-
-@router.get("/register", response_class=HTMLResponse)
-def register_page(request: Request):
-    return _register_page(request)
-
-
-@router.post("/register", response_class=HTMLResponse)
-def register(
-    request: Request,
-    restaurant_name: str = Form(""),
-    name: str = Form(""),
-    email: str = Form(""),
-    password: str = Form(""),
-    conn=Depends(get_db),
-):
-    form = {"restaurant_name": restaurant_name, "name": name, "email": email}
-    try:
-        account = RegisterIn(restaurant_name=restaurant_name, name=name, email=email, password=password)
-    except ValidationError as error:
-        return _register_page(request, form, form_errors(error), status_code=422)
+@router.post("/auth/register", response_model=SessionOut, status_code=201)
+def register(account: RegisterIn, conn=Depends(get_db)):
+    """Creates a restaurant with its first manager and logs them in. A new restaurant starts empty."""
     if services.email_taken(conn, account.email):
-        return _register_page(request, form, [EMAIL_TAKEN], status_code=422)
-
+        raise HTTPException(status_code=409, detail=EMAIL_TAKEN)
     user_id = services.register_restaurant(conn, account.restaurant_name, account.name, account.email,
                                            account.password)
-    _log_in(request, repository.get_user(conn, user_id))   # a new restaurant starts empty, ready to fill in
-    return RedirectResponse("/", status_code=303)
+    return _session(repository.get_user(conn, user_id))
 
 
-# ---------- Managers of the restaurant ----------
+@router.post("/auth/refresh", response_model=SessionOut)
+def refresh(user=Depends(current_user)):
+    """A new token for a manager whose current token is still valid.
 
-def _managers_page(request, conn, user, errors=None, form=None, added=None, status_code=200):
-    return templates.TemplateResponse(
-        request, "accounts/managers.html",
-        {"managers": repository.get_managers(conn, user["restaurant_id"]), "user": user, "errors": errors or [],
-         "form": form or {}, "added": added, "min_password": MIN_PASSWORD_LENGTH},
-        status_code=status_code,
-    )
-
-
-@router.get("/account/managers", response_class=HTMLResponse)
-def managers_page(request: Request, added: str = None, conn=Depends(get_db), user=Depends(current_user)):
-    return _managers_page(request, conn, user, added=added)
+    current_user has already looked the manager up, so a removed manager gets 401 here and their
+    last token stops working in sales within TOKEN_MINUTES (ADR-6).
+    """
+    return _session(user)
 
 
-@router.post("/account/managers", response_class=HTMLResponse)
-def add_manager(
-    request: Request,
-    name: str = Form(""),
-    email: str = Form(""),
-    password: str = Form(""),
-    conn=Depends(get_db),
-    user=Depends(current_user),
-):
-    form = {"name": name, "email": email}
-    try:
-        manager = ManagerIn(name=name, email=email, password=password)
-    except ValidationError as error:
-        return _managers_page(request, conn, user, errors=form_errors(error), form=form, status_code=422)
+@router.get("/auth/me", response_model=ManagerOut)
+def me(user=Depends(current_user)):
+    return {"id": user["id"], "name": user["name"], "email": user["email"]}
+
+
+@router.get("/account/managers", response_model=list[ManagerOut])
+def list_managers(conn=Depends(get_db), user=Depends(current_user)):
+    """Every manager of the logged-in manager's restaurant, and only of that restaurant."""
+    return repository.get_managers(conn, user["restaurant_id"])
+
+
+@router.post("/account/managers", response_model=ManagerOut, status_code=201)
+def add_manager(manager: ManagerIn, conn=Depends(get_db), user=Depends(current_user)):
+    """Gives another person their own login to the same restaurant."""
     if services.email_taken(conn, manager.email):
-        return _managers_page(request, conn, user, errors=[EMAIL_TAKEN], form=form, status_code=422)
-
-    services.add_manager(conn, user["restaurant_id"], manager.name, manager.email, manager.password)
-    return RedirectResponse(f"/account/managers?{urlencode({'added': manager.email})}", status_code=303)
+        raise HTTPException(status_code=409, detail=EMAIL_TAKEN)
+    manager_id = services.add_manager(conn, user["restaurant_id"], manager.name, manager.email, manager.password)
+    return {"id": manager_id, "name": manager.name, "email": manager.email}
