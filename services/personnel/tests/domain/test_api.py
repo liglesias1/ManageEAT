@@ -1,4 +1,4 @@
-"""The personnel endpoints: payroll, the overview figures, and the wage cost that sales asks for."""
+"""The personnel endpoints that only use personnel's data: payroll, the overview figures, and the wage cost."""
 import pytest
 
 from tests.conftest import log_in
@@ -14,10 +14,14 @@ def test_payroll_lists_every_employee_with_totals(client):
     assert {r["role"] for r in body["by_role"]} == {"Waiter", "Runner", "Bar", "Pass", "Cook", "Dishwasher"}
 
 
-def test_the_summary_matches_the_payroll(client):
+def test_the_summary_matches_the_payroll_and_the_schedule(client):
     payroll = client.get("/personnel/payroll").json()
+    schedule = client.get("/personnel/schedule").json()
     summary = client.get("/personnel/summary").json()
-    assert summary == {"employees": 16, "hours": payroll["total_hours"], "wages": payroll["total_pay"]}
+    assert (summary["employees"], summary["hours"], summary["wages"]) == \
+        (16, payroll["total_hours"], payroll["total_pay"])
+    assert summary["schedule"] == schedule["summary"]
+    assert summary["demand"] == {"source": "live"}
 
 
 # ---------- The seam ----------

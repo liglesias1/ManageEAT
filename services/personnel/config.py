@@ -19,3 +19,8 @@ TOKEN_SECRET = os.getenv("TOKEN_SECRET")
 # How long a token is valid. The same number limits how long a removed manager can still use sales, and
 # how long logged-in managers keep using sales while personnel is down (ADR-6).
 TOKEN_MINUTES = int(os.getenv("TOKEN_MINUTES", "15"))
+
+# Where the sales service is, and how long to wait for its covers before using the last ones received (ADR-6).
+# The default is its name in docker-compose; on Azure the pipeline sets its public URL.
+SALES_URL = os.getenv("SALES_URL", "http://sales:8000")
+SALES_TIMEOUT_S = float(os.getenv("SALES_TIMEOUT_S", "5"))

@@ -120,3 +120,6 @@ def test_a_manager_only_lists_the_managers_of_their_own_restaurant(visitor):
     response = register(visitor)
     managers = visitor.get("/account/managers", headers=bearer(response)).json()
     assert [m["email"] for m in managers] == ["pepe@barpepe.es"]
+
+def test_the_schedule_needs_a_token(visitor):
+    assert visitor.get("/personnel/schedule").status_code == 401

@@ -62,3 +62,24 @@ def get_clock_in_period(conn, restaurant_id):
         (restaurant_id,),
     ).fetchone()
     return row["first"], row["last"]
+
+# ---------- Last covers received from sales ----------
+
+def save_demand(conn, restaurant_id, payload, fetched_at):
+    """Keeps sales' last answer about covers (as JSON text), replacing the previous one of that restaurant."""
+    conn.execute(
+        """
+        INSERT INTO demand_snapshots (restaurant_id, payload, fetched_at) VALUES (?, ?, ?)
+        ON CONFLICT (restaurant_id) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at
+        """,
+        (restaurant_id, payload, fetched_at),
+    )
+    conn.commit()
+
+
+def get_demand_snapshot(conn, restaurant_id):
+    """The last answer about covers received from sales and when, as (payload, fetched_at), or None."""
+    row = conn.execute(
+        "SELECT payload, fetched_at FROM demand_snapshots WHERE restaurant_id = ?", (restaurant_id,)
+    ).fetchone()
+    return (row["payload"], row["fetched_at"]) if row else None

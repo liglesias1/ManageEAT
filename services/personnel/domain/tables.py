@@ -34,3 +34,14 @@ CREATE TABLE IF NOT EXISTS clock_ins (
 -- Payroll and labor cost filter by restaurant and date
 CREATE INDEX IF NOT EXISTS clock_ins_by_restaurant ON clock_ins (restaurant_id, clock_in);
 """
+
+# The covers per hour received from the sales service, kept to use when it does not answer (ADR-6, ADR-7).
+# One row per restaurant with sales' whole answer as JSON and the time it answered; personnel never reads
+# sales' tables.
+DEMAND_SNAPSHOT_SCHEMA = """
+CREATE TABLE IF NOT EXISTS demand_snapshots (
+    restaurant_id  INTEGER PRIMARY KEY,
+    payload        TEXT    NOT NULL,
+    fetched_at     TEXT    NOT NULL
+);
+"""

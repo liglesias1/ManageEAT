@@ -11,7 +11,7 @@ from accounts.tables import ACCOUNTS_SCHEMA
 from database import get_connection, init_db
 from domain.routes import router as personnel_router
 from domain.seed import seed_personnel_if_empty
-from domain.tables import PERSONNEL_SCHEMA
+from domain.tables import DEMAND_SNAPSHOT_SCHEMA, PERSONNEL_SCHEMA
 
 
 @asynccontextmanager
@@ -21,7 +21,7 @@ async def lifespan(app):
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = get_connection()
     try:
-        init_db(conn, [ACCOUNTS_SCHEMA, PERSONNEL_SCHEMA])
+        init_db(conn, [ACCOUNTS_SCHEMA, PERSONNEL_SCHEMA, DEMAND_SNAPSHOT_SCHEMA])
         if config.SEED_DEMO_DATA:
             # The demo account owns the demo data; restaurants that register later start empty
             demo = seed_demo_restaurant(conn)

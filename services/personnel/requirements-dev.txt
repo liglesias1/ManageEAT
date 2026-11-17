@@ -1,5 +1,4 @@
 # Extra tools for tests, not installed in the Docker image.
 -r requirements.txt
-httpx==0.28.1         # FastAPI's TestClient sends the test requests with it
 pytest==8.4.2         # runs the tests
 pytest-cov==7.1.0     # measures test coverage
