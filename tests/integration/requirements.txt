@@ -1,0 +1,3 @@
+# Tools for the integration test, which talks to the running services over HTTP.
+httpx==0.28.1         # sends the requests
+pytest==8.4.2         # runs the test

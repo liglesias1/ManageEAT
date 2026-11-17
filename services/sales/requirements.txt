@@ -1,0 +1,5 @@
+# What the sales service needs to run. Exact versions, so every build installs the same thing.
+fastapi==0.128.8      # web framework: endpoints, validation, OpenAPI document
+uvicorn==0.39.0       # server that runs the FastAPI app
+PyJWT==2.15.1         # checks the login tokens signed by personnel (ADR-6)
+httpx==0.28.1         # asks the personnel service for wage costs, with a timeout
