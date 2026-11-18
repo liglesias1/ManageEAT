@@ -1,0 +1,46 @@
+# The whole ManageEAT system for local development: docker compose up --build
+# Passwords come from .env (not committed); .env.example lists the variables.
+#
+# For now: SQL Server with one database per service. The two services and the UI are added in step 6.
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64          # SQL Server only exists for Intel; on Apple Silicon it runs through Rosetta
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer         # free edition for development
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in .env}
+    ports:
+      - "1433:1433"                # so the services and tests running on your machine can reach it
+    volumes:
+      - sqlserver-data:/var/opt/mssql   # the data survives docker compose down (not down -v)
+    healthcheck:                   # healthy once it answers a query; db-init waits for this
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  db-init:                         # one-off: creates the databases and logins, then exits
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in .env}
+      SALES_DB_PASSWORD: ${SALES_DB_PASSWORD:?set SALES_DB_PASSWORD in .env}
+      PERSONNEL_DB_PASSWORD: ${PERSONNEL_DB_PASSWORD:?set PERSONNEL_DB_PASSWORD in .env}
+    volumes:
+      - ./db/init.sql:/init.sql:ro
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -i /init.sql
+        -v SALES_DB_PASSWORD="$$SALES_DB_PASSWORD" PERSONNEL_DB_PASSWORD="$$PERSONNEL_DB_PASSWORD"
+    restart: "no"
+
+volumes:
+  sqlserver-data:

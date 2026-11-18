@@ -3,3 +3,4 @@ fastapi==0.128.8      # web framework: endpoints, validation, OpenAPI document
 uvicorn==0.39.0       # server that runs the FastAPI app
 PyJWT==2.15.1         # signs and checks the login tokens (ADR-6)
 httpx==0.28.1         # asks the sales service for the covers per hour, with a timeout
+pymssql==2.4.6        # connects to SQL Server (no ODBC driver needed in the image)

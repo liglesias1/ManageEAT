@@ -7,6 +7,8 @@ orders, and they do not depend on how personnel generates its clock-ins.
 import random
 from datetime import date, datetime, timedelta
 
+from database import insert_rows
+
 # id, name, phone, email, lead_time_days
 SUPPLIERS = [
     (1, "Almacenes Levante", "+34 961 234 567", "pedidos@almaceneslevante.es", 3),
@@ -135,46 +137,50 @@ def _orders_for_day(rng, day):
     return orders
 
 
-def generate_orders(conn, restaurant_id, start=DEMO_START, days=DEMO_DAYS, seed=42):
-    """Fills the orders of one restaurant with `days` days of POS data."""
+def order_rows(restaurant_id, first_id, start=DEMO_START, days=DEMO_DAYS, seed=42):
+    """The demo POS data of one restaurant as (orders, order_items) rows, with order ids from `first_id` on.
+
+    The ids are chosen here, instead of by the database, so the items can refer to their order and both
+    tables can be inserted in a few multi-row statements.
+    """
     rng = random.Random(seed)
+    orders, items = [], []
+    order_id = first_id
     for offset in range(days):
         day = start + timedelta(days=offset)
-        for when, covers, items in _orders_for_day(rng, day):
-            order_id = conn.execute(
-                "INSERT INTO orders (restaurant_id, table_no, covers, created_at) VALUES (?, ?, ?, ?)",
-                (restaurant_id, rng.randint(1, 20), covers, when.isoformat()),
-            ).lastrowid
-            conn.executemany(
-                "INSERT INTO order_items (order_id, item_code, quantity, unit_price) VALUES (?, ?, ?, ?)",
-                [(order_id, code, qty, PRICES[code]) for code, qty in items.items()],
-            )
+        for when, covers, picked in _orders_for_day(rng, day):
+            orders.append((order_id, restaurant_id, rng.randint(1, 20), covers, when))
+            items.extend((order_id, code, qty, PRICES[code]) for code, qty in picked.items())
+            order_id += 1
+    return orders, items
 
 
-def seed_sales_if_empty(conn, restaurant_id):
-    """Loads the demo data into a restaurant that has no suppliers yet.
+def seed_sales_if_empty(db, restaurant_id):
+    """Loads the demo data into a restaurant that has no suppliers yet, in one transaction.
 
-    Checking first makes it idempotent: restarting the service never duplicates the demo data.
+    Checking first makes it idempotent: restarting the service never duplicates the demo data. Suppliers and
+    ingredients keep their demo ids, because the recipes, purchases and ingredients refer to them.
     """
-    if conn.execute("SELECT COUNT(*) FROM suppliers WHERE restaurant_id = ?", (restaurant_id,)).fetchone()[0] > 0:
+    if db.execute("SELECT COUNT(*) FROM suppliers WHERE restaurant_id = %s", (restaurant_id,)).fetchone()[0] > 0:
         return
-    conn.executemany("INSERT INTO suppliers VALUES (?, ?, ?, ?, ?, ?)",
-                     [(s[0], restaurant_id, *s[1:]) for s in SUPPLIERS])
-    conn.executemany("INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                     [(i[0], restaurant_id, *i[1:]) for i in INGREDIENTS])
-    conn.executemany("INSERT INTO menu_items VALUES (?, ?, ?, ?, ?)", [(restaurant_id, *m) for m in MENU_ITEMS])
-    conn.executemany("INSERT INTO recipes VALUES (?, ?, ?, ?)", [(restaurant_id, *r) for r in RECIPES])
-    conn.executemany(
-        "INSERT INTO purchases (supplier_id, ingredient_id, quantity, unit_price, received_on) VALUES (?, ?, ?, ?, ?)",
-        [
+    with db:
+        insert_rows(db, "suppliers", ("id", "restaurant_id", "name", "phone", "email", "lead_time_days"),
+                    [(s[0], restaurant_id, *s[1:]) for s in SUPPLIERS], keep_ids=True)
+        insert_rows(db, "ingredients", ("id", "restaurant_id", "name", "unit", "unit_cost", "supplier_id",
+                                        "counted_stock", "counted_at", "reorder_level"),
+                    [(i[0], restaurant_id, *i[1:]) for i in INGREDIENTS], keep_ids=True)
+        insert_rows(db, "menu_items", ("restaurant_id", "code", "name", "category", "price"),
+                    [(restaurant_id, *m) for m in MENU_ITEMS])
+        insert_rows(db, "recipes", ("restaurant_id", "item_code", "ingredient_id", "quantity"),
+                    [(restaurant_id, *r) for r in RECIPES])
+        insert_rows(db, "purchases", ("supplier_id", "ingredient_id", "quantity", "unit_price", "received_on"), [
             (supplier_id, ingredient_id, round(counted * share), unit_cost, day)
             for day, share in PURCHASE_ROUNDS
             for ingredient_id, _, _, unit_cost, supplier_id, counted, _, _ in INGREDIENTS
-        ],
-    )
-    conn.executemany(
-        "INSERT INTO fixed_expenses (restaurant_id, description, amount, month) VALUES (?, ?, ?, ?)",
-        [(restaurant_id, *e) for e in FIXED_EXPENSES],
-    )
-    generate_orders(conn, restaurant_id)
-    conn.commit()
+        ])
+        insert_rows(db, "fixed_expenses", ("restaurant_id", "description", "amount", "month"),
+                    [(restaurant_id, *e) for e in FIXED_EXPENSES])
+        first_id = db.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM orders").fetchone()[0]
+        orders, items = order_rows(restaurant_id, first_id)
+        insert_rows(db, "orders", ("id", "restaurant_id", "table_no", "covers", "created_at"), orders, keep_ids=True)
+        insert_rows(db, "order_items", ("order_id", "item_code", "quantity", "unit_price"), items)

@@ -7,6 +7,8 @@ another one, and neither depends on the other to produce the same data on every 
 import random
 from datetime import date, datetime, timedelta
 
+from database import insert_rows
+
 # id, name, hourly_rate (EUR), covers_per_hour (diners one person can handle in an hour), min_staff
 ROLES = [
     (1, "Waiter", 11.50, 30, 1),
@@ -59,29 +61,32 @@ def _shift_for(rng, day, service):
     return start + timedelta(minutes=rng.randint(-10, 10)), end + timedelta(minutes=rng.randint(-5, 20))
 
 
-def generate_clock_ins(conn, restaurant_id, start=DEMO_START, days=DEMO_DAYS, seed=42):
-    """Fills the clock-ins of one restaurant with `days` days of shifts (two days off per week each)."""
+def clock_in_rows(restaurant_id, start=DEMO_START, days=DEMO_DAYS, seed=42):
+    """The demo clock-ins of one restaurant: `days` days of shifts, two days off per week each person."""
     rng = random.Random(seed)
+    rows = []
     for offset in range(days):
         day = start + timedelta(days=offset)
         for employee_id, service in EMPLOYEE_SHIFTS.items():
             if (employee_id + offset) % 7 in (0, 1):
                 continue
             clock_in, clock_out = _shift_for(rng, day, service)
-            conn.execute(
-                "INSERT INTO clock_ins (restaurant_id, employee_id, clock_in, clock_out) VALUES (?, ?, ?, ?)",
-                (restaurant_id, employee_id, clock_in.isoformat(), clock_out.isoformat()),
-            )
+            rows.append((restaurant_id, employee_id, clock_in, clock_out))
+    return rows
 
 
-def seed_personnel_if_empty(conn, restaurant_id):
-    """Loads the demo roles, employees and clock-ins into a restaurant that has no roles yet.
+def seed_personnel_if_empty(db, restaurant_id):
+    """Loads the demo roles, employees and clock-ins into a restaurant that has no roles yet, in one transaction.
 
-    Checking first makes it idempotent: restarting the service never duplicates the demo data.
+    Checking first makes it idempotent: restarting the service never duplicates the demo data. Roles and
+    employees keep their demo ids, because the clock-ins and the employees refer to them.
     """
-    if conn.execute("SELECT COUNT(*) FROM roles WHERE restaurant_id = ?", (restaurant_id,)).fetchone()[0] > 0:
+    if db.execute("SELECT COUNT(*) FROM roles WHERE restaurant_id = %s", (restaurant_id,)).fetchone()[0] > 0:
         return
-    conn.executemany("INSERT INTO roles VALUES (?, ?, ?, ?, ?, ?)", [(r[0], restaurant_id, *r[1:]) for r in ROLES])
-    conn.executemany("INSERT INTO employees VALUES (?, ?, ?, ?)", [(e[0], restaurant_id, *e[1:]) for e in EMPLOYEES])
-    generate_clock_ins(conn, restaurant_id)
-    conn.commit()
+    with db:
+        insert_rows(db, "roles", ("id", "restaurant_id", "name", "hourly_rate", "covers_per_hour", "min_staff"),
+                    [(r[0], restaurant_id, *r[1:]) for r in ROLES], keep_ids=True)
+        insert_rows(db, "employees", ("id", "restaurant_id", "name", "role_id"),
+                    [(e[0], restaurant_id, *e[1:]) for e in EMPLOYEES], keep_ids=True)
+        insert_rows(db, "clock_ins", ("restaurant_id", "employee_id", "clock_in", "clock_out"),
+                    clock_in_rows(restaurant_id))

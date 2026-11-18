@@ -1,8 +1,7 @@
 """The personnel tables and their demo data: roles, employees and clock-ins."""
-import sqlite3
-
 import pytest
 
+from database import IntegrityError
 from domain import repository
 from domain.seed import seed_personnel_if_empty
 
@@ -27,22 +26,22 @@ def test_every_clocked_employee_exists(conn):
 
 def test_the_demo_clock_ins_are_the_same_on_every_start(conn):
     seed_personnel_if_empty(conn, R)
-    first = conn.execute("SELECT clock_in, clock_out FROM clock_ins ORDER BY id").fetchall()
+    first = [tuple(row) for row in conn.execute("SELECT clock_in, clock_out FROM clock_ins ORDER BY id").fetchall()]
     conn.execute("DELETE FROM clock_ins")
     conn.execute("DELETE FROM employees")
     conn.execute("DELETE FROM roles")
     seed_personnel_if_empty(conn, R)
-    assert conn.execute("SELECT clock_in, clock_out FROM clock_ins ORDER BY id").fetchall() == first
+    assert [tuple(row) for row in conn.execute("SELECT clock_in, clock_out FROM clock_ins ORDER BY id").fetchall()] == first
 
 
 def test_hourly_rate_must_be_positive(conn):
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         conn.execute("INSERT INTO roles (restaurant_id, name, hourly_rate, covers_per_hour, min_staff) "
                      "VALUES (1, 'Host', 0, 10, 1)")
 
 
 def test_employee_needs_an_existing_role(conn):
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         conn.execute("INSERT INTO employees (restaurant_id, name, role_id) VALUES (1, 'Nobody', 99)")
 
 

@@ -1,4 +1,5 @@
 """The demo account: a restaurant that owns the demo data, and its manager, so the app can be tried straight away."""
+from database import insert_rows
 
 DEMO_RESTAURANT_ID = 1
 DEMO_RESTAURANT_NAME = "Demo restaurant"
@@ -12,14 +13,18 @@ DEMO_PASSWORD_HASH = (
 )
 
 
-def seed_demo_restaurant(conn):
-    """Creates the demo restaurant and its manager on a brand-new database, and returns the restaurant's id."""
-    exists = conn.execute("SELECT 1 FROM restaurants WHERE id = ?", (DEMO_RESTAURANT_ID,)).fetchone()
+def seed_demo_restaurant(db):
+    """Creates the demo restaurant and its manager on a brand-new database, and returns the restaurant's id.
+
+    The restaurant keeps the id 1 (SET IDENTITY_INSERT), because the sales service seeds its demo data for
+    that same id: the two services only share the number (ADR-7).
+    """
+    exists = db.execute("SELECT 1 FROM restaurants WHERE id = %s", (DEMO_RESTAURANT_ID,)).fetchone()
     if not exists:
-        with conn:
-            conn.execute("INSERT INTO restaurants (id, name) VALUES (?, ?)", (DEMO_RESTAURANT_ID, DEMO_RESTAURANT_NAME))
-            conn.execute(
-                "INSERT INTO users (restaurant_id, name, email, password_hash) VALUES (?, ?, ?, ?)",
+        with db:
+            insert_rows(db, "restaurants", ("id", "name"), [(DEMO_RESTAURANT_ID, DEMO_RESTAURANT_NAME)], keep_ids=True)
+            db.execute(
+                "INSERT INTO users (restaurant_id, name, email, password_hash) VALUES (%s, %s, %s, %s)",
                 (DEMO_RESTAURANT_ID, DEMO_USER_NAME, DEMO_EMAIL, DEMO_PASSWORD_HASH),
             )
     return DEMO_RESTAURANT_ID

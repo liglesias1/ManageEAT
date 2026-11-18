@@ -65,7 +65,7 @@ def test_a_token_is_renewed_while_the_account_exists(client):
 
 def test_a_removed_manager_is_refused_at_once_and_cannot_renew(client):
     conn = get_connection()
-    conn.execute("DELETE FROM users WHERE email = ?", (DEMO_EMAIL,))
+    conn.execute("DELETE FROM users WHERE email = %s", (DEMO_EMAIL,))
     conn.commit()
     conn.close()
     assert client.get("/personnel/payroll").status_code == 401        # personnel checks the database every time
