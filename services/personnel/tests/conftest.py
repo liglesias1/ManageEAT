@@ -1,20 +1,37 @@
-"""Shared test fixtures: a throw-away database, a known token secret, and a stub in place of the sales service.
+"""Shared test fixtures: a SQL Server test database, a known token secret, and a stub in place of the sales service.
+
+The tests run against SQL Server, the same engine as the service (§5: tests use a SQL Server container, never
+Azure SQL). At the start of the session they create the database personnel_test on that server, apply the
+real migrations to it, and drop it at the end. Before every test all its tables are emptied, so every test
+starts from the same empty database; the ones that need the demo data get it from the app's own seed.
+
+The server comes from TEST_SQLSERVER_URL, an administrator login that can create databases, e.g.
+mssql://sa:<password>@localhost:1433/master. If it is not set (on your machine), it is built from
+MSSQL_SA_PASSWORD in the repository's .env, for the SQL Server of `docker compose up -d sqlserver`.
 
 The tests never need sales running: `sales` replaces it with an httpx MockTransport, a fake that answers
 like the real endpoint (or fails like a stopped service), so each test chooses what sales does.
 """
+import os
 from datetime import date, timedelta
+from pathlib import Path
+from urllib.parse import quote
 
 import httpx
+import pymssql
 import pytest
 from fastapi.testclient import TestClient
 
 import config
 from accounts.seed import DEMO_EMAIL, DEMO_PASSWORD
-from accounts.tables import ACCOUNTS_SCHEMA
-from database import get_connection, init_db
+from database import get_connection, parse_url
 from domain.demand import COVERS_PATH, sales_client
-from domain.tables import DEMAND_SNAPSHOT_SCHEMA, PERSONNEL_SCHEMA
+from migrations import apply_migrations
+
+REPO_ROOT = Path(__file__).resolve().parents[3]      # services/personnel/tests/conftest.py -> the repository
+TEST_DATABASE = "personnel_test"
+# Every table of the service, children before parents, so emptying them never breaks a foreign key
+TABLES = ["clock_ins", "employees", "roles", "demand_snapshots", "users", "restaurants"]
 
 TEST_SECRET = "test-secret-only-used-by-the-tests-0123456789"
 
@@ -49,6 +66,69 @@ class SalesStub:
         return httpx.Client(transport=httpx.MockTransport(self.handle), base_url="http://sales")
 
 
+# ---------- The test database ----------
+
+def _from_env_file(name):
+    """A value from the repository's .env (KEY=value lines), or None."""
+    env_file = REPO_ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            key, _, value = line.partition("=")
+            if key.strip() == name and value.strip():
+                return value.strip()
+    return None
+
+
+def _server_url():
+    url = os.getenv("TEST_SQLSERVER_URL")
+    if url:
+        return url
+    password = os.getenv("MSSQL_SA_PASSWORD") or _from_env_file("MSSQL_SA_PASSWORD")
+    if not password:
+        pytest.exit("The tests need SQL Server: start it with `docker compose up -d sqlserver` and set "
+                    "MSSQL_SA_PASSWORD in .env, or set TEST_SQLSERVER_URL", returncode=1)
+    return f"mssql://sa:{quote(password, safe='')}@localhost:1433/master"
+
+
+def _drop(cursor):
+    cursor.execute(f"""
+        IF DB_ID('{TEST_DATABASE}') IS NOT NULL
+        BEGIN
+            ALTER DATABASE {TEST_DATABASE} SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+            DROP DATABASE {TEST_DATABASE};
+        END
+    """)
+
+
+@pytest.fixture(scope="session")
+def test_database():
+    """Creates personnel_test with the real migrations, points the service at it, and drops it at the end."""
+    server = parse_url(_server_url())
+    admin = pymssql.connect(**server, autocommit=True)      # CREATE DATABASE cannot run inside a transaction
+    cursor = admin.cursor()
+    _drop(cursor)                                            # a run that was interrupted may have left it
+    cursor.execute(f"CREATE DATABASE {TEST_DATABASE}")
+    url = (f"mssql://{quote(server['user'], safe='')}:{quote(server['password'], safe='')}"
+           f"@{server['server']}:{server['port']}/{TEST_DATABASE}")
+    config.DATABASE_URL = url
+    db = get_connection(url)
+    apply_migrations(db)
+    db.close()
+    yield url
+    _drop(cursor)
+    admin.close()
+
+
+@pytest.fixture(autouse=True)
+def empty_tables(test_database):
+    """Every test starts from the migrated schema with no rows."""
+    db = get_connection(test_database)
+    with db:
+        for table in TABLES:
+            db.execute(f"DELETE FROM {table}")
+    db.close()
+
+
 @pytest.fixture(autouse=True)
 def token_secret(monkeypatch):
     """Every test signs and checks tokens with the same known secret."""
@@ -56,12 +136,11 @@ def token_secret(monkeypatch):
 
 
 @pytest.fixture
-def conn():
-    """An empty in-memory database with all the tables of the personnel service."""
-    connection = get_connection(":memory:")
-    init_db(connection, [ACCOUNTS_SCHEMA, PERSONNEL_SCHEMA, DEMAND_SNAPSHOT_SCHEMA])
-    yield connection
-    connection.close()
+def conn(test_database):
+    """A connection to the empty test database. What a test does not commit is undone when it closes."""
+    db = get_connection(test_database)
+    yield db
+    db.close()
 
 
 @pytest.fixture
@@ -70,10 +149,8 @@ def sales():
 
 
 @pytest.fixture
-def visitor(tmp_path, monkeypatch, sales):
-    """The whole service on a temporary data folder with the demo data, with the stub as sales."""
-    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(config, "DB_PATH", tmp_path / "test.db")
+def visitor(sales):
+    """The whole service on the test database, which its startup fills with the demo data, with the stub as sales."""
     import app
 
     app.app.dependency_overrides[sales_client] = sales.client
