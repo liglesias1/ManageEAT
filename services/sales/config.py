@@ -6,8 +6,14 @@ HOST = "0.0.0.0"  # listen on every interface, so the service can be reached fro
 PORT = int(os.getenv("PORT", "8000"))
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
-DB_PATH = DATA_DIR / "sales.db"   # SQLite until step 3, when it becomes DATABASE_URL (SQL Server)
+
+# Connection string of sales' own database: mssql://sales_app:<password>@<host>:1433/sales.
+# It contains a password, so it has no default: app.py refuses to start without it.
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# How long to keep retrying while the database is not ready (a paused Azure SQL database takes up to
+# about a minute to resume).
+DB_CONNECT_RETRY_S = float(os.getenv("DB_CONNECT_RETRY_S", "90"))
 
 # If true, an empty database gets the demo restaurant's data on startup
 SEED_DEMO_DATA = os.getenv("SEED_DEMO_DATA", "true").lower() == "true"
