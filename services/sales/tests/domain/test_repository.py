@@ -1,7 +1,6 @@
-import sqlite3
-
 import pytest
 
+from database import IntegrityError, insert_rows
 from domain.repository import (
     add_fixed_expense,
     add_purchase,
@@ -29,24 +28,31 @@ OTHER = 2    # a second restaurant, to check that data never leaks between them
 
 
 def add_menu(conn, restaurant_id=R, first_id=1):
-    """Two ingredients, two dishes (one of them never sold) and one recipe each."""
+    """Two ingredients, two dishes (one of them never sold) and one recipe each.
+
+    The ids are given (keep_ids), so the recipes can refer to the ingredients and the tests to both.
+    """
     supplier, rice, chicken = first_id, first_id, first_id + 1
-    conn.execute("INSERT INTO suppliers VALUES (?, ?, 'Supplier', '600000000', NULL, 2)", (supplier, restaurant_id))
-    conn.execute("INSERT INTO ingredients VALUES (?, ?, 'Rice', 'kg', 2.0, ?, 10, '2026-09-01', 2)",
-                 (rice, restaurant_id, supplier))
-    conn.execute("INSERT INTO ingredients VALUES (?, ?, 'Chicken', 'kg', 5.0, ?, 10, '2026-09-01', 2)",
-                 (chicken, restaurant_id, supplier))
-    conn.execute("INSERT INTO menu_items VALUES (?, 'PAE01', 'Paella', 'main', 18)", (restaurant_id,))
-    conn.execute("INSERT INTO menu_items VALUES (?, 'RIS01', 'Risotto', 'main', 16)", (restaurant_id,))
-    conn.execute("INSERT INTO recipes VALUES (?, 'PAE01', ?, 0.1)", (restaurant_id, rice))      # 0.1 kg rice    = 0.20
-    conn.execute("INSERT INTO recipes VALUES (?, 'PAE01', ?, 0.2)", (restaurant_id, chicken))   # 0.2 kg chicken = 1.00
-    conn.execute("INSERT INTO recipes VALUES (?, 'RIS01', ?, 0.5)", (restaurant_id, rice))      # 0.5 kg rice    = 1.00
+    insert_rows(conn, "suppliers", ("id", "restaurant_id", "name", "phone", "email", "lead_time_days"),
+                [(supplier, restaurant_id, "Supplier", "600000000", None, 2)], keep_ids=True)
+    insert_rows(conn, "ingredients", ("id", "restaurant_id", "name", "unit", "unit_cost", "supplier_id",
+                                      "counted_stock", "counted_at", "reorder_level"),
+                [(rice, restaurant_id, "Rice", "kg", 2.0, supplier, 10, "2026-09-01", 2),
+                 (chicken, restaurant_id, "Chicken", "kg", 5.0, supplier, 10, "2026-09-01", 2)], keep_ids=True)
+    insert_rows(conn, "menu_items", ("restaurant_id", "code", "name", "category", "price"),
+                [(restaurant_id, "PAE01", "Paella", "main", 18), (restaurant_id, "RIS01", "Risotto", "main", 16)])
+    insert_rows(conn, "recipes", ("restaurant_id", "item_code", "ingredient_id", "quantity"), [
+        (restaurant_id, "PAE01", rice, 0.1),       # 0.1 kg rice    = 0.20
+        (restaurant_id, "PAE01", chicken, 0.2),    # 0.2 kg chicken = 1.00
+        (restaurant_id, "RIS01", rice, 0.5),       # 0.5 kg rice    = 1.00
+    ])
 
 
 def add_order(conn, order_id, item_code, quantity, price, restaurant_id=R, created_at="2026-09-01T14:00:00"):
-    conn.execute("INSERT INTO orders VALUES (?, ?, 1, 2, ?)", (order_id, restaurant_id, created_at))
+    insert_rows(conn, "orders", ("id", "restaurant_id", "table_no", "covers", "created_at"),
+                [(order_id, restaurant_id, 1, 2, created_at)], keep_ids=True)
     conn.execute(
-        "INSERT INTO order_items (order_id, item_code, quantity, unit_price) VALUES (?, ?, ?, ?)",
+        "INSERT INTO order_items (order_id, item_code, quantity, unit_price) VALUES (%s, %s, %s, %s)",
         (order_id, item_code, quantity, price),
     )
 
@@ -80,11 +86,11 @@ def test_dish_cost_follows_ingredient_price(conn):
 def test_demo_data_loads_once(conn):
     seed_sales_if_empty(conn, R)
     seed_sales_if_empty(conn, R)
-    assert conn.execute("SELECT COUNT(*) FROM menu_items WHERE restaurant_id = ?", (R,)).fetchone()[0] == 13
+    assert conn.execute("SELECT COUNT(*) FROM menu_items WHERE restaurant_id = %s", (R,)).fetchone()[0] == 13
 
 
 def test_supplier_needs_phone_or_email(conn):
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         conn.execute("INSERT INTO suppliers (restaurant_id, name, lead_time_days) VALUES (1, 'No contact', 2)")
 
 
@@ -136,7 +142,7 @@ def test_deliveries_after_the_stocktake_count_as_received(conn):
 
 def test_purchase_quantity_must_be_positive(conn):
     add_menu(conn)
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         add_purchase(conn, 1, 1, 0, 2.0, "2026-09-03")
 
 
@@ -179,10 +185,11 @@ def test_sales_period_in_month_only_looks_at_that_month(conn):
 
 def test_database_rejects_repeated_names_whatever_the_case(conn):
     add_menu(conn)                                           # supplier "Supplier", ingredients Rice and Chicken
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         add_supplier(conn, R, "SUPPLIER", "600", None, 2)
-    with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO ingredients VALUES (3, 1, 'rice', 'kg', 2.0, 1, 10, '2026-09-01', 2)")
+    with pytest.raises(IntegrityError):
+        conn.execute("INSERT INTO ingredients (restaurant_id, name, unit, unit_cost, supplier_id, counted_stock, "
+                     "counted_at, reorder_level) VALUES (1, 'rice', 'kg', 2.0, 1, 10, '2026-09-01', 2)")
 
 
 # ---------- Two restaurants never see each other's data ----------
@@ -197,7 +204,7 @@ def test_two_restaurants_can_use_the_same_names_and_dish_codes(conn):
 def test_each_restaurant_only_sees_its_own_sales_and_costs(conn):
     add_menu(conn, R, first_id=1)
     add_menu(conn, OTHER, first_id=10)
-    conn.execute("UPDATE ingredients SET unit_cost = 4.0 WHERE restaurant_id = ? AND name = 'Rice'", (OTHER,))
+    conn.execute("UPDATE ingredients SET unit_cost = 4.0 WHERE restaurant_id = %s AND name = 'Rice'", (OTHER,))
     add_order(conn, 1, "PAE01", 2, 18.0, restaurant_id=R)
     add_order(conn, 2, "PAE01", 5, 20.0, restaurant_id=OTHER, created_at="2026-10-01T14:00:00")
 

@@ -2,6 +2,7 @@
 import pytest
 from pydantic import ValidationError
 
+from database import insert_rows
 from domain.repository import add_dish, get_menu, get_recipe_lines
 from domain.schemas import DishIn
 from domain.services import FOOD_COST_TARGET, cost_dishes, dishes_summary, new_dish_code
@@ -70,8 +71,11 @@ def test_dish_form_needs_a_recipe_without_repeated_ingredients():
 
 
 def test_add_dish_saves_dish_and_recipe_together(conn):
-    conn.execute("INSERT INTO suppliers (id, restaurant_id, name, email, lead_time_days) VALUES (1, 1, 'S', 's@s.es', 2)")
-    conn.execute("INSERT INTO ingredients VALUES (1, 1, 'Rice', 'kg', 2.0, 1, 10, '2026-09-01', 1)")
+    insert_rows(conn, "suppliers", ("id", "restaurant_id", "name", "email", "lead_time_days"),
+                [(1, 1, "S", "s@s.es", 2)], keep_ids=True)
+    insert_rows(conn, "ingredients", ("id", "restaurant_id", "name", "unit", "unit_cost", "supplier_id",
+                                      "counted_stock", "counted_at", "reorder_level"),
+                [(1, 1, "Rice", "kg", 2.0, 1, 10, "2026-09-01", 1)], keep_ids=True)
     add_dish(conn, 1, "RIC01", "Rice bowl", "main", 9.5, [(1, 0.2)])
     assert get_menu(conn, 1) == [{"code": "RIC01", "name": "Rice bowl", "category": "main", "price": 9.5}]
     assert get_recipe_lines(conn, 1)[0]["quantity"] == 0.2

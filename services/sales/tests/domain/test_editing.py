@@ -1,13 +1,18 @@
 """Editing dishes and their recipes, ingredients and suppliers."""
+from database import insert_rows
 from domain.repository import get_dish, get_ingredient, get_recipe, update_dish
 
 
 def test_update_dish_replaces_the_whole_recipe(conn):
-    conn.execute("INSERT INTO suppliers (id, restaurant_id, name, email, lead_time_days) VALUES (1, 1, 'S', 's@s.es', 2)")
-    conn.execute("INSERT INTO ingredients VALUES (1, 1, 'Rice', 'kg', 2.0, 1, 10, '2026-09-01', 1)")
-    conn.execute("INSERT INTO ingredients VALUES (2, 1, 'Chicken', 'kg', 6.0, 1, 10, '2026-09-01', 1)")
-    conn.execute("INSERT INTO menu_items VALUES (1, 'PAE01', 'Paella', 'main', 18)")
-    conn.execute("INSERT INTO recipes VALUES (1, 'PAE01', 1, 0.1)")
+    insert_rows(conn, "suppliers", ("id", "restaurant_id", "name", "email", "lead_time_days"),
+                [(1, 1, "S", "s@s.es", 2)], keep_ids=True)
+    insert_rows(conn, "ingredients", ("id", "restaurant_id", "name", "unit", "unit_cost", "supplier_id",
+                                      "counted_stock", "counted_at", "reorder_level"),
+                [(1, 1, "Rice", "kg", 2.0, 1, 10, "2026-09-01", 1),
+                 (2, 1, "Chicken", "kg", 6.0, 1, 10, "2026-09-01", 1)], keep_ids=True)
+    conn.execute("INSERT INTO menu_items (restaurant_id, code, name, category, price) "
+                 "VALUES (1, 'PAE01', 'Paella', 'main', 18)")
+    conn.execute("INSERT INTO recipes (restaurant_id, item_code, ingredient_id, quantity) VALUES (1, 'PAE01', 1, 0.1)")
     update_dish(conn, 1, "PAE01", "Paella mixta", "main", 19.5, [(2, 0.2)])
     assert get_dish(conn, 1, "PAE01")["price"] == 19.5
     assert get_recipe(conn, 1, "PAE01") == [(2, 0.2)]          # rice removed, chicken added

@@ -1,9 +1,8 @@
 """The rules of the sales forms: limits of each field and the business rules in services."""
-import sqlite3
-
 import pytest
 from pydantic import ValidationError
 
+from database import IntegrityError
 from domain import services
 from domain.schemas import CATEGORIES, DishIn, FixedExpenseIn, IngredientIn, PurchaseIn, SupplierIn
 
@@ -75,9 +74,9 @@ def test_expense_month_must_be_a_real_month(month):
 def test_every_category_is_accepted_by_the_form_and_by_the_database(conn):
     for category in CATEGORIES:
         assert DishIn(name="Dish", category=category, price=5, recipe=LINE).category == category
-        conn.execute("INSERT INTO menu_items (restaurant_id, code, name, category, price) VALUES (1, ?, 'Dish', ?, 5)",
-                     (category, category))
-    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO menu_items (restaurant_id, code, name, category, price) "
+                     "VALUES (1, %s, 'Dish', %s, 5)", (category, category))
+    with pytest.raises(IntegrityError):
         conn.execute("INSERT INTO menu_items (restaurant_id, code, name, category, price) VALUES (1, 'X', 'X', "
                      "'snack', 5)")
 
