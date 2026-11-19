@@ -1,9 +1,11 @@
-"""Business logic of the personnel domain. Only calculations, no SQL."""
+"""Business logic of the personnel domain: calculations and business rules, no SQL.
+
+The routes read the data with repository.py and hand it to these functions, so every function here can be
+tested with plain lists and dicts, without a database.
+"""
 import math
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
-
-from domain import repository
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -144,11 +146,48 @@ def payroll_by_role(payroll):
     return list(roles.values())
 
 
-def labor_cost(conn, restaurant_id, start, end):
-    """Total wage cost of one restaurant between two dates (inclusive).
+def labor_cost(shifts):
+    """Total wage cost of the given shifts (the worked shifts of one restaurant between two dates).
 
-    This is the ONLY function the sales domain may use from personnel: the seam between the two
-    domains. In Assignment 2 it becomes an HTTP endpoint of the personnel service.
+    This is what the sales service asks for over HTTP (GET /personnel/labor-cost): the seam between the two
+    services. The route reads the shifts of the period; this function only adds up their pay.
     """
-    shifts = repository.get_worked_shifts(conn, restaurant_id, start, end)
     return round(sum(person["pay"] for person in calculate_payroll(shifts)), 2)
+
+
+# ---------- Business rules for the staff a manager edits ----------
+# Each function returns why the data cannot be saved (the message the manager sees, with 422), or None.
+
+def name_taken(name, names):
+    """True if `name` is already in `names`, ignoring upper and lower case: 'waiter' clashes with 'Waiter'."""
+    return name.lower() in {n.lower() for n in names}
+
+
+def role_problem(role, other_role_names):
+    """`other_role_names` leaves out the role being edited, so it can keep its own name."""
+    if name_taken(role.name, other_role_names):
+        return "Name: there is already a role with that name"
+    return None
+
+
+def employee_problem(employee, role_ids):
+    """An employee can only have one of their own restaurant's roles."""
+    if employee.role_id not in role_ids:
+        return "Role: choose one of the roles"
+    return None
+
+
+def clock_in_problem(entry, employee_ids, overlaps, today):
+    """Why a missed shift cannot be recorded, or None.
+
+    The employee must belong to the restaurant, the shift cannot start on a future day, and it cannot
+    overlap another clock-in of the same person (that would pay the same hours twice). `today` is passed
+    in, not read here, so the rule can be tested with any date.
+    """
+    if entry.employee_id not in employee_ids:
+        return "Employee: choose one of the employees"
+    if entry.clock_in.date() > today:
+        return "A clock-in cannot be on a future day"
+    if overlaps:
+        return "This employee already has a clock-in that overlaps these hours"
+    return None
