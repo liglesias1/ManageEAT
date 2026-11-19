@@ -1,7 +1,10 @@
-# The whole ManageEAT system for local development: docker compose up --build
-# Passwords come from .env (not committed); .env.example lists the variables.
+# The whole ManageEAT system for local development, from a clean clone:
 #
-# For now: SQL Server with one database per service. The two services and the UI are added in step 6.
+#   cp .env.example .env      # then fill in the four values
+#   docker compose up --build
+#
+# UI: http://localhost:8080   personnel: http://localhost:8001   sales: http://localhost:8002
+# Secrets come from .env, which is not committed; compose refuses to start if one is missing.
 
 services:
   sqlserver:
@@ -12,7 +15,7 @@ services:
       MSSQL_PID: Developer         # free edition for development
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in .env}
     ports:
-      - "1433:1433"                # so the services and tests running on your machine can reach it
+      - "1433:1433"                # so the tests running on your machine can reach it
     volumes:
       - sqlserver-data:/var/opt/mssql   # the data survives docker compose down (not down -v)
     healthcheck:                   # healthy once it answers a query; db-init waits for this
@@ -41,6 +44,55 @@ services:
         /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -i /init.sql
         -v SALES_DB_PASSWORD="$$SALES_DB_PASSWORD" PERSONNEL_DB_PASSWORD="$$PERSONNEL_DB_PASSWORD"
     restart: "no"
+
+  personnel:
+    build:
+      context: services/personnel
+      args:
+        GIT_SHA: ${GIT_SHA:-dev}   # GIT_SHA=$(git rev-parse --short HEAD) docker compose up --build
+    depends_on:
+      db-init:
+        condition: service_completed_successfully   # its database and login exist before it connects
+    environment:
+      # Its own login, which can only open the personnel database
+      DATABASE_URL: mssql://personnel_app:${PERSONNEL_DB_PASSWORD:?set PERSONNEL_DB_PASSWORD in .env}@sqlserver:1433/personnel
+      TOKEN_SECRET: ${TOKEN_SECRET:?set TOKEN_SECRET in .env}
+      SALES_URL: http://sales:8000         # the other service, by its name on the compose network
+      CORS_ORIGINS: http://localhost:8080  # the UI below
+    ports:
+      - "8001:8000"                # the browser calls it here (config.js)
+    healthcheck: &health           # 200 only when it can write to and read its own database
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  sales:
+    build:
+      context: services/sales
+      args:
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: mssql://sales_app:${SALES_DB_PASSWORD:?set SALES_DB_PASSWORD in .env}@sqlserver:1433/sales
+      TOKEN_SECRET: ${TOKEN_SECRET:?set TOKEN_SECRET in .env}
+      PERSONNEL_URL: http://personnel:8000
+      CORS_ORIGINS: http://localhost:8080
+    ports:
+      - "8002:8000"
+    healthcheck: *health
+    restart: unless-stopped
+
+  ui:                              # the static UI, served as it is: a stock image with the folder mounted
+    image: nginx:1.27-alpine
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
 
 volumes:
   sqlserver-data:
