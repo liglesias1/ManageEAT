@@ -285,3 +285,28 @@ tr.selected td { background: var(--bg); font-weight: 600; }
 .auth-card .form button { justify-self: stretch; }
 .auth-switch { margin: 18px 0 0; font-size: 14px; }
 .auth-demo { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+
+/* Static UI: a service that is starting or down, buttons outside forms, editing rows in a table */
+.notice.warning { background: var(--plowhorse-bg); color: var(--plowhorse); }
+.loading { margin: 8px 0 22px; }
+.form-message:empty { display: none; }
+.form button:disabled { opacity: 0.6; cursor: wait; }
+.button, button.retry {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.button:hover, button.retry:hover { border-color: var(--accent); }
+.button.danger { color: var(--dog); }
+.button.danger:hover { border-color: var(--dog); }
+.button:disabled { opacity: 0.5; cursor: not-allowed; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+.inline-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+.inline-fields input, .inline-fields select { width: 100%; min-width: 0; }
+.auth-demo { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
