@@ -1,0 +1,12 @@
+# Kept out of the build context. The Dockerfile only copies what it lists, but a smaller context builds
+# faster and can never leak a stray .env or cache into an image.
+tests/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.env
+requirements-dev.txt
+pytest.ini
