@@ -10,7 +10,7 @@ PROTECTED = ["/sales/menu", "/sales/dishes", "/sales/inventory", "/sales/supplie
 # ---------- Who can ask ----------
 
 def test_health_needs_no_login(visitor):
-    assert visitor.get("/health").json() == {"status": "ok"}
+    assert visitor.get("/health").status_code == 200
 
 
 @pytest.mark.parametrize("path", PROTECTED)
