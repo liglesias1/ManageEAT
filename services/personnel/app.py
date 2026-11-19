@@ -6,6 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 
 import config
+import observability
 from accounts.routes import router as accounts_router
 from accounts.seed import seed_demo_restaurant
 from database import get_connection
@@ -38,12 +39,9 @@ async def lifespan(app):
 app = FastAPI(title="ManageEAT personnel", lifespan=lifespan)
 app.include_router(accounts_router)
 app.include_router(personnel_router)
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+observability.install(app)          # CORS for the UI, one log line per request, GET /health
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=config.HOST, port=config.PORT)
+    # access_log=False: observability.log_requests already writes one line per request, with its duration
+    uvicorn.run(app, host=config.HOST, port=config.PORT, access_log=False)

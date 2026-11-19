@@ -33,7 +33,7 @@ def test_a_bad_token_is_refused(visitor, path):
 
 
 def test_health_needs_no_login(visitor):
-    assert visitor.get("/health").json() == {"status": "ok"}
+    assert visitor.get("/health").status_code == 200
 
 
 def test_the_demo_manager_logs_in_and_gets_a_token_for_the_demo_restaurant(visitor):

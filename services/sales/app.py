@@ -6,6 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 
 import config
+import observability
 from database import get_connection
 from domain.routes import router as sales_router
 from domain.seed import seed_sales_if_empty
@@ -37,12 +38,9 @@ async def lifespan(app):
 
 app = FastAPI(title="ManageEAT sales", lifespan=lifespan)
 app.include_router(sales_router)
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+observability.install(app)          # CORS for the UI, one log line per request, GET /health
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=config.HOST, port=config.PORT)
+    # access_log=False: observability.log_requests already writes one line per request, with its duration
+    uvicorn.run(app, host=config.HOST, port=config.PORT, access_log=False)
