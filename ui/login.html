@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in · ManageEAT</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="static/style.css">
+  <script src="config.js" defer></script>
+  <script src="js/app.js" defer></script>
+  <script src="js/login.js" defer></script>
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <p class="brand">Manage<span>EAT</span></p>
+    <p class="brand-sub">Restaurant management</p>
+    <h1>Log in to your restaurant</h1>
+    <form class="form" id="login-form">
+      <label>Email<input name="email" type="email" required autofocus autocomplete="username"></label>
+      <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
+      <button type="submit">Log in</button>
+    </form>
+    <p class="auth-switch">New restaurant? <a class="link" href="register.html">Create an account</a></p>
+    <p class="auth-demo">Just looking? Use the demo account: <strong>demo@manageeat.com</strong> / <strong>demo1234</strong></p>
+  </main>
+</body>
+</html>
