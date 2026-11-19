@@ -26,3 +26,13 @@ TOKEN_SECRET = os.getenv("TOKEN_SECRET")
 # The default is its name in docker-compose; on Azure the pipeline sets its public URL.
 PERSONNEL_URL = os.getenv("PERSONNEL_URL", "http://personnel:8000")
 PERSONNEL_TIMEOUT_S = float(os.getenv("PERSONNEL_TIMEOUT_S", "5"))
+
+# The git commit this copy of the service was built from. The Dockerfile receives it as a build argument
+# and sets it as an environment variable, so GET /health can say which version is running.
+VERSION = os.getenv("GIT_SHA", "dev")
+
+# The origins (scheme://host[:port]) whose pages may call this service from the browser, separated by
+# commas. The default is the UI served by nginx in docker-compose; on Azure the pipeline sets the storage
+# static website's address. Never "*": no other site can use a manager's token against the API.
+CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:8080").split(",")
+                if origin.strip()]
