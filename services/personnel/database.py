@@ -146,25 +146,39 @@ def parse_url(url):
     }
 
 
-def get_connection(url=None):
+def error_code(error):
+    """The error number inside a pymssql error, or None.
+
+    pymssql wraps it in a tuple with the message: error.args == ((18456, b"Login failed for user ..."),).
+    A bare number in args[0] is accepted too.
+    """
+    first = error.args[0] if error.args else None
+    if isinstance(first, tuple) and first and isinstance(first[0], int):
+        return first[0]
+    return first if isinstance(first, int) else None
+
+
+def get_connection(url=None, retry_s=None, login_timeout=15):
     """Connects to the database, retrying with growing waits while it is not ready.
 
     A serverless Azure SQL database pauses when idle and takes up to about a minute to resume; meanwhile
-    connections fail (error 40613). Locally, SQL Server may still be starting. So every failure except a
-    wrong login is retried, waiting 1, 2, 4, 8... seconds (at most 15 between tries), for up to
-    DB_CONNECT_RETRY_S seconds in total.
+    connections fail (error 40613, or with pymssql a DB-Lib 20002/20003 connection timeout). Locally, SQL
+    Server may still be starting. So every failure except a wrong login is retried, waiting 1, 2, 4, 8...
+    seconds (at most 15 between tries), for up to `retry_s` seconds in total (DB_CONNECT_RETRY_S by
+    default). GET /health passes retry_s=0: one attempt, so it answers 503 at once instead of waiting.
     """
     arguments = parse_url(url or config.DATABASE_URL)
-    deadline = time.monotonic() + config.DB_CONNECT_RETRY_S
+    budget = config.DB_CONNECT_RETRY_S if retry_s is None else retry_s
+    deadline = time.monotonic() + budget
     wait = 1
     while True:
         try:
-            return Database(pymssql.connect(**arguments, login_timeout=15, autocommit=False))
+            return Database(pymssql.connect(**arguments, login_timeout=login_timeout, autocommit=False))
         except pymssql.OperationalError as error:
-            code = error.args[0] if error.args and isinstance(error.args[0], int) else None
+            code = error_code(error)
             if code in NOT_RETRIED or time.monotonic() + wait > deadline:
                 raise
-            logger.warning("Database not ready (%s), trying again in %ss", code or error, wait)
+            logger.warning("Database not ready (error %s), trying again in %ss", code, wait)
             time.sleep(wait)
             wait = min(wait * 2, 15)
 
