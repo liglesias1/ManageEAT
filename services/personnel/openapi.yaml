@@ -1,0 +1,1075 @@
+openapi: 3.1.0
+info:
+  title: ManageEAT personnel
+  version: 0.1.0
+paths:
+  /auth/login:
+    post:
+      tags:
+      - accounts
+      summary: Login
+      operationId: login_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionOut'
+        '401':
+          description: The email or the password is not correct
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /auth/register:
+    post:
+      tags:
+      - accounts
+      summary: Register
+      description: Creates a restaurant with its first manager and logs them in. A new restaurant starts empty.
+      operationId: register_auth_register_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionOut'
+        '409':
+          description: There is already an account with that email
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /auth/refresh:
+    post:
+      tags:
+      - accounts
+      summary: Refresh
+      description: 'A new token for a manager whose current token is still valid.
+
+
+        current_user has already looked the manager up, so a removed manager gets 401 here and their
+
+        last token stops working in sales within TOKEN_MINUTES (ADR-6).'
+      operationId: refresh_auth_refresh_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionOut'
+        '401':
+          description: Missing, invalid or expired token, or the account no longer exists
+      security:
+      - HTTPBearer: []
+  /auth/me:
+    get:
+      tags:
+      - accounts
+      summary: Me
+      operationId: me_auth_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagerOut'
+        '401':
+          description: Missing, invalid or expired token, or the account no longer exists
+      security:
+      - HTTPBearer: []
+  /account/managers:
+    get:
+      tags:
+      - accounts
+      summary: List Managers
+      description: Every manager of the logged-in manager's restaurant, and only of that restaurant.
+      operationId: list_managers_account_managers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ManagerOut'
+                type: array
+                title: Response List Managers Account Managers Get
+        '401':
+          description: Missing, invalid or expired token, or the account no longer exists
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - accounts
+      summary: Add Manager
+      description: Gives another person their own login to the same restaurant.
+      operationId: add_manager_account_managers_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManagerIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagerOut'
+        '401':
+          description: Missing, invalid or expired token, or the account no longer exists
+        '409':
+          description: There is already an account with that email
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /personnel/roles:
+    get:
+      tags:
+      - personnel
+      summary: List Roles
+      description: Every role, with how many employees have it.
+      operationId: list_roles_personnel_roles_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/RoleOut'
+                type: array
+                title: Response List Roles Personnel Roles Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - personnel
+      summary: Create Role
+      operationId: create_role_personnel_roles_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Created'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /personnel/roles/{role_id}:
+    put:
+      tags:
+      - personnel
+      summary: Update Role
+      description: Changes a role. Payroll always uses the role's current hourly rate, so a new rate also changes past pay.
+      operationId: update_role_personnel_roles__role_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: role_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Role Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Created'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - personnel
+      summary: Delete Role
+      description: Deletes a role created by mistake; 409 if any employee still has it.
+      operationId: delete_role_personnel_roles__role_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: role_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Role Id
+      responses:
+        '204':
+          description: Successful Response
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The role still has employees
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /personnel/employees:
+    get:
+      tags:
+      - personnel
+      summary: List Employees
+      description: Every employee with their role and how many clock-ins they have.
+      operationId: list_employees_personnel_employees_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/EmployeeOut'
+                type: array
+                title: Response List Employees Personnel Employees Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - personnel
+      summary: Create Employee
+      operationId: create_employee_personnel_employees_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Created'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /personnel/employees/{employee_id}:
+    put:
+      tags:
+      - personnel
+      summary: Update Employee
+      description: Changes an employee's name or role (a role change also changes the rate of their past shifts).
+      operationId: update_employee_personnel_employees__employee_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: employee_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Employee Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Created'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - personnel
+      summary: Delete Employee
+      description: Deletes an employee created by mistake (e.g. someone who never started); 409 if they have clock-ins.
+      operationId: delete_employee_personnel_employees__employee_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: employee_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Employee Id
+      responses:
+        '204':
+          description: Successful Response
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The employee has clock-ins
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /personnel/clock-ins:
+    post:
+      tags:
+      - personnel
+      summary: Record Clock In
+      description: Records by hand a shift the clock-in system missed. It counts in payroll and the schedule at once.
+      operationId: record_clock_in_personnel_clock_ins_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClockInIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClockInOut'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /personnel/schedule:
+    get:
+      tags:
+      - personnel
+      summary: Schedule
+      description: 'Recommended against actual staff for every opening hour, and the average covers that drive it.
+
+
+        Covers come from sales. If it does not answer, the last covers received are used and `demand` says from
+
+        when; if there are none, `demand` is unavailable and the schedule is empty, but the roles are listed.'
+      operationId: schedule_personnel_schedule_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Schedule Personnel Schedule Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+  /personnel/payroll:
+    get:
+      tags:
+      - personnel
+      summary: Payroll
+      description: Hours and pay of every employee, and the totals per role, over the period with clock-ins.
+      operationId: payroll_personnel_payroll_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollOut'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+  /personnel/summary:
+    get:
+      tags:
+      - personnel
+      summary: Summary
+      description: 'The personnel figures of the overview page: schedule gaps, employees paid, hours worked and wages.'
+      operationId: summary_personnel_summary_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Summary Personnel Summary Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+  /personnel/labor-cost:
+    get:
+      tags:
+      - personnel
+      summary: Labor Cost
+      description: 'Total wage cost between two dates (inclusive), for the profit and loss of the sales service.
+
+
+        Sales forwards the manager''s token, so the restaurant is the one of the manager who asked.'
+      operationId: labor_cost_personnel_labor_cost_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: start
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+          title: Start
+      - name: end
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+          title: End
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborCostOut'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      tags:
+      - health
+      summary: Health
+      description: 200 with db "ok" if the service can use its own database; 503 with db "error" if it cannot.
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: The service cannot write to or read from its database
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  schemas:
+    ClockInIn:
+      properties:
+        employee_id:
+          type: integer
+          title: Employee Id
+        clock_in:
+          type: string
+          format: date-time
+          title: Clock In
+        clock_out:
+          type: string
+          format: date-time
+          title: Clock Out
+      type: object
+      required:
+      - employee_id
+      - clock_in
+      - clock_out
+      title: ClockInIn
+      description: A shift the clock-in system missed, entered by hand, in the restaurant's local time.
+    ClockInOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        employee_id:
+          type: integer
+          title: Employee Id
+        hours:
+          type: number
+          title: Hours
+      type: object
+      required:
+      - id
+      - employee_id
+      - hours
+      title: ClockInOut
+    Created:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - id
+      - name
+      title: Created
+    EmployeeIn:
+      properties:
+        name:
+          type: string
+          maxLength: 80
+          minLength: 2
+          title: Name
+        role_id:
+          type: integer
+          title: Role Id
+      type: object
+      required:
+      - name
+      - role_id
+      title: EmployeeIn
+    EmployeeOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+        role_id:
+          type: integer
+          title: Role Id
+        role:
+          type: string
+          title: Role
+        clock_ins:
+          type: integer
+          title: Clock Ins
+          description: How many clock-ins they have (they can only be deleted at 0)
+      type: object
+      required:
+      - id
+      - name
+      - role_id
+      - role
+      - clock_ins
+      title: EmployeeOut
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    Health:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - error
+          title: Status
+        db:
+          type: string
+          enum:
+          - ok
+          - error
+          title: Db
+        version:
+          type: string
+          title: Version
+      type: object
+      required:
+      - status
+      - db
+      - version
+      title: Health
+    LaborCostOut:
+      properties:
+        start:
+          type: string
+          format: date
+          title: Start
+        end:
+          type: string
+          format: date
+          title: End
+        labor_cost:
+          type: number
+          title: Labor Cost
+          description: Total wages of the restaurant's clock-ins in the period, in EUR
+      type: object
+      required:
+      - start
+      - end
+      - labor_cost
+      title: LaborCostOut
+      description: What the sales service receives from GET /personnel/labor-cost (the seam, ADR-6).
+    LoginIn:
+      properties:
+        email:
+          type: string
+          maxLength: 120
+          minLength: 3
+          title: Email
+        password:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Password
+      type: object
+      required:
+      - email
+      - password
+      title: LoginIn
+    ManagerIn:
+      properties:
+        name:
+          type: string
+          maxLength: 80
+          minLength: 2
+          title: Name
+        email:
+          type: string
+          maxLength: 120
+          title: Email
+        password:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Password
+      type: object
+      required:
+      - name
+      - email
+      - password
+      title: ManagerIn
+      description: 'A manager''s own login: name, email and password (used when registering and when adding a manager).'
+    ManagerOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+        email:
+          type: string
+          title: Email
+      type: object
+      required:
+      - id
+      - name
+      - email
+      title: ManagerOut
+    PayrollOut:
+      properties:
+        start:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Start
+          description: First day with clock-ins, or null if there are none
+        end:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: End
+        payroll:
+          items:
+            $ref: '#/components/schemas/PayrollRow'
+          type: array
+          title: Payroll
+        by_role:
+          items:
+            $ref: '#/components/schemas/RolePay'
+          type: array
+          title: By Role
+        total_pay:
+          type: number
+          title: Total Pay
+        total_hours:
+          type: number
+          title: Total Hours
+      type: object
+      required:
+      - start
+      - end
+      - payroll
+      - by_role
+      - total_pay
+      - total_hours
+      title: PayrollOut
+    PayrollRow:
+      properties:
+        employee:
+          type: string
+          title: Employee
+        role:
+          type: string
+          title: Role
+        hourly_rate:
+          type: number
+          title: Hourly Rate
+        shifts:
+          type: integer
+          title: Shifts
+        hours:
+          type: number
+          title: Hours
+        pay:
+          type: number
+          title: Pay
+      type: object
+      required:
+      - employee
+      - role
+      - hourly_rate
+      - shifts
+      - hours
+      - pay
+      title: PayrollRow
+    Problem:
+      properties:
+        detail:
+          type: string
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: Problem
+      description: The body of every 401, 404, 409 and business-rule 422 answer.
+    RegisterIn:
+      properties:
+        name:
+          type: string
+          maxLength: 80
+          minLength: 2
+          title: Name
+        email:
+          type: string
+          maxLength: 120
+          title: Email
+        password:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Password
+        restaurant_name:
+          type: string
+          maxLength: 80
+          minLength: 2
+          title: Restaurant Name
+      type: object
+      required:
+      - name
+      - email
+      - password
+      - restaurant_name
+      title: RegisterIn
+      description: A new restaurant and the manager who creates it.
+    RestaurantOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - id
+      - name
+      title: RestaurantOut
+    RoleIn:
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          minLength: 2
+          title: Name
+        hourly_rate:
+          type: number
+          maximum: 200.0
+          exclusiveMinimum: 0.0
+          title: Hourly Rate
+        covers_per_hour:
+          type: integer
+          maximum: 500.0
+          exclusiveMinimum: 0.0
+          title: Covers Per Hour
+        min_staff:
+          type: integer
+          maximum: 50.0
+          minimum: 0.0
+          title: Min Staff
+      type: object
+      required:
+      - name
+      - hourly_rate
+      - covers_per_hour
+      - min_staff
+      title: RoleIn
+      description: 'A job in the restaurant: what it pays, how many diners one person serves per hour, and the minimum staff.'
+    RoleOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+        hourly_rate:
+          type: number
+          title: Hourly Rate
+        covers_per_hour:
+          type: integer
+          title: Covers Per Hour
+        min_staff:
+          type: integer
+          title: Min Staff
+        employees:
+          type: integer
+          title: Employees
+          description: How many employees have this role (it can only be deleted at 0)
+      type: object
+      required:
+      - id
+      - name
+      - hourly_rate
+      - covers_per_hour
+      - min_staff
+      - employees
+      title: RoleOut
+    RolePay:
+      properties:
+        role:
+          type: string
+          title: Role
+        people:
+          type: integer
+          title: People
+        hours:
+          type: number
+          title: Hours
+        pay:
+          type: number
+          title: Pay
+      type: object
+      required:
+      - role
+      - people
+      - hours
+      - pay
+      title: RolePay
+    SessionOut:
+      properties:
+        token:
+          type: string
+          title: Token
+        expires_in:
+          type: integer
+          title: Expires In
+          description: Seconds until the token expires
+        user:
+          $ref: '#/components/schemas/ManagerOut'
+        restaurant:
+          $ref: '#/components/schemas/RestaurantOut'
+      type: object
+      required:
+      - token
+      - expires_in
+      - user
+      - restaurant
+      title: SessionOut
+      description: 'Answer to login, register and refresh: the token the UI sends with every request, and who it belongs to.'
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer

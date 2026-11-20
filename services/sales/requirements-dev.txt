@@ -2,3 +2,5 @@
 -r requirements.txt
 pytest==8.4.2         # runs the tests
 pytest-cov==7.1.0     # measures test coverage
+PyYAML==6.0.3                   # reads and writes openapi.yaml (export_openapi.py and its test)
+openapi-spec-validator==0.7.2   # checks openapi.yaml against the OpenAPI specification (0.7 still supports Python 3.9)
