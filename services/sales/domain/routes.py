@@ -12,10 +12,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth import Session, current_restaurant, current_session
 from database import get_db
 from domain import repository, services
-from domain.schemas import CATEGORIES, DishIn, FixedExpenseIn, IngredientIn, PurchaseIn, SupplierIn
+from domain.schemas import (CATEGORIES, CoversOut, Created, DishCreated, DishIn, DishOut, ExpenseCreated,
+                            FixedExpenseIn, IngredientCreated, IngredientIn, IngredientOut, Problem, PurchaseCreated,
+                            PurchaseIn, SupplierIn)
 from domain.wages import Wages, personnel_client  # the only way sales gets numbers from personnel (ADR-2)
 
-router = APIRouter(prefix="/sales", tags=["sales"])
+router = APIRouter(prefix="/sales", tags=["sales"],
+                   responses={401: {"model": Problem, "description": "Missing, invalid or expired token"}})
+NOT_FOUND = {404: {"model": Problem, "description": "Not found in the manager's restaurant"}}
 
 
 def _problem(message):
@@ -32,7 +36,7 @@ def _ingredient_ids(conn, restaurant_id):
 
 # ---------- Menu performance ----------
 
-@router.get("/menu")
+@router.get("/menu", response_model=dict)
 def menu(conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     """Every dish classified as star, plowhorse, puzzle or dog, by category, most sold first."""
     dishes = services.classify_menu(repository.get_dish_sales(conn, restaurant_id))
@@ -49,7 +53,7 @@ def menu(conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant))
 
 # ---------- Dishes and recipes ----------
 
-@router.get("/dishes")
+@router.get("/dishes", response_model=dict)
 def dishes(conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     """The menu with the cost and margin of every dish, and the ingredients a recipe can use."""
     costed = services.cost_dishes(repository.get_menu(conn, restaurant_id),
@@ -63,7 +67,7 @@ def dishes(conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant
     }
 
 
-@router.post("/dishes", status_code=201)
+@router.post("/dishes", status_code=201, response_model=DishCreated)
 def create_dish(dish: DishIn, conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     problem = services.dish_problem(dish, _ingredient_ids(conn, restaurant_id))
     if problem:
@@ -74,7 +78,7 @@ def create_dish(dish: DishIn, conn=Depends(get_db), restaurant_id: int = Depends
     return {"code": code, "name": dish.name}
 
 
-@router.get("/dishes/{code}")
+@router.get("/dishes/{code}", response_model=DishOut, responses=NOT_FOUND)
 def get_dish(code: str, conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     """One dish and its recipe, to fill the edit form."""
     dish = repository.get_dish(conn, restaurant_id, code)
@@ -84,7 +88,7 @@ def get_dish(code: str, conn=Depends(get_db), restaurant_id: int = Depends(curre
     return {**dish, "recipe": [{"ingredient_id": i, "quantity": q} for i, q in recipe]}
 
 
-@router.put("/dishes/{code}")
+@router.put("/dishes/{code}", response_model=DishCreated, responses=NOT_FOUND)
 def update_dish(code: str, dish: DishIn, conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     """Replaces the dish's name, category, price and whole recipe."""
     if repository.get_dish(conn, restaurant_id, code) is None:
@@ -99,7 +103,7 @@ def update_dish(code: str, dish: DishIn, conn=Depends(get_db), restaurant_id: in
 
 # ---------- Inventory: ingredients and suppliers ----------
 
-@router.get("/inventory")
+@router.get("/inventory", response_model=dict)
 def inventory(conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     """Current stock of every ingredient (as of the last day with orders), what to reorder, and the suppliers."""
     as_of = repository.get_last_order_day(conn, restaurant_id)
@@ -123,7 +127,7 @@ def _check_ingredient(conn, restaurant_id, ingredient, editing_id=None):
         raise _problem(problem)
 
 
-@router.post("/ingredients", status_code=201)
+@router.post("/ingredients", status_code=201, response_model=IngredientCreated)
 def create_ingredient(ingredient: IngredientIn, conn=Depends(get_db),
                       restaurant_id: int = Depends(current_restaurant)):
     """A new ingredient with its first stock count, bought from an existing supplier or a new one."""
@@ -139,7 +143,7 @@ def create_ingredient(ingredient: IngredientIn, conn=Depends(get_db),
     return {"name": ingredient.name, "supplier_id": supplier_id}
 
 
-@router.get("/ingredients/{ingredient_id}")
+@router.get("/ingredients/{ingredient_id}", response_model=IngredientOut, responses=NOT_FOUND)
 def get_ingredient(ingredient_id: int, conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     ingredient = repository.get_ingredient(conn, restaurant_id, ingredient_id)
     if ingredient is None:
@@ -147,7 +151,7 @@ def get_ingredient(ingredient_id: int, conn=Depends(get_db), restaurant_id: int 
     return ingredient
 
 
-@router.put("/ingredients/{ingredient_id}")
+@router.put("/ingredients/{ingredient_id}", response_model=IngredientCreated, responses=NOT_FOUND)
 def update_ingredient(ingredient_id: int, ingredient: IngredientIn, conn=Depends(get_db),
                       restaurant_id: int = Depends(current_restaurant)):
     """Same rules as a new ingredient, but it can only move to a supplier that already exists."""
@@ -162,7 +166,7 @@ def update_ingredient(ingredient_id: int, ingredient: IngredientIn, conn=Depends
     return {"name": ingredient.name, "supplier_id": ingredient.supplier_id}
 
 
-@router.post("/suppliers", status_code=201)
+@router.post("/suppliers", status_code=201, response_model=Created)
 def create_supplier(supplier: SupplierIn, conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     """A new supplier, which can take over some existing ingredients."""
     problem = services.supplier_problem(supplier, [s["name"] for s in repository.get_suppliers(conn, restaurant_id)],
@@ -174,7 +178,7 @@ def create_supplier(supplier: SupplierIn, conn=Depends(get_db), restaurant_id: i
     return {"id": supplier_id, "name": supplier.name}
 
 
-@router.get("/suppliers/{supplier_id}")
+@router.get("/suppliers/{supplier_id}", response_model=dict, responses=NOT_FOUND)
 def get_supplier(supplier_id: int, conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     """A supplier with the products it sells, their stock, and its delivery history."""
     supplier = repository.get_supplier(conn, restaurant_id, supplier_id)
@@ -193,7 +197,7 @@ def get_supplier(supplier_id: int, conn=Depends(get_db), restaurant_id: int = De
     }
 
 
-@router.put("/suppliers/{supplier_id}")
+@router.put("/suppliers/{supplier_id}", response_model=Created, responses=NOT_FOUND)
 def update_supplier(supplier_id: int, supplier: SupplierIn, conn=Depends(get_db),
                     restaurant_id: int = Depends(current_restaurant)):
     """Changes a supplier's name and contact; same rules as a new supplier (phone or email required)."""
@@ -208,7 +212,8 @@ def update_supplier(supplier_id: int, supplier: SupplierIn, conn=Depends(get_db)
     return {"id": supplier_id, "name": supplier.name}
 
 
-@router.post("/suppliers/{supplier_id}/purchases", status_code=201)
+@router.post("/suppliers/{supplier_id}/purchases", status_code=201, response_model=PurchaseCreated,
+             responses=NOT_FOUND)
 def record_purchase(supplier_id: int, purchase: PurchaseIn, conn=Depends(get_db),
                     restaurant_id: int = Depends(current_restaurant)):
     """A delivery from the supplier; it only delivers the products it sells."""
@@ -230,7 +235,7 @@ def _wages(client=Depends(personnel_client), session: Session = Depends(current_
     return Wages(client, session.token, conn, session.restaurant_id)
 
 
-@router.get("/profit-loss")
+@router.get("/profit-loss", response_model=dict)
 def profit_loss(month: str = None, conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant),
                 wages: Wages = Depends(_wages)):
     """The monthly statement, week by week, and the history of every month.
@@ -272,7 +277,7 @@ def profit_loss(month: str = None, conn=Depends(get_db), restaurant_id: int = De
     }
 
 
-@router.post("/expenses", status_code=201)
+@router.post("/expenses", status_code=201, response_model=ExpenseCreated)
 def create_fixed_expense(expense: FixedExpenseIn, conn=Depends(get_db),
                          restaurant_id: int = Depends(current_restaurant)):
     repository.add_fixed_expense(conn, restaurant_id, expense.description, expense.amount, expense.month)
@@ -282,7 +287,7 @@ def create_fixed_expense(expense: FixedExpenseIn, conn=Depends(get_db),
 
 # ---------- Overview, and what personnel asks for ----------
 
-@router.get("/summary")
+@router.get("/summary", response_model=dict)
 def summary(conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant), wages: Wages = Depends(_wages)):
     """The sales figures of the overview page, for the month the profit and loss opens on."""
     current = date.today().strftime("%Y-%m")
@@ -311,7 +316,7 @@ def summary(conn=Depends(get_db), restaurant_id: int = Depends(current_restauran
     }
 
 
-@router.get("/covers")
+@router.get("/covers", response_model=CoversOut)
 def covers(conn=Depends(get_db), restaurant_id: int = Depends(current_restaurant)):
     """Diners per day and hour, and the days the restaurant was open: what personnel needs for the schedule."""
     return {

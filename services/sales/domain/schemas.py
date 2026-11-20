@@ -130,3 +130,70 @@ class IngredientIn(BaseModel):
         if (self.supplier_id is None) == (self.new_supplier is None):
             raise ValueError("choose an existing supplier or add a new one")
         return self
+    
+# ---------- What the API answers ----------
+# Response models: FastAPI checks every answer against them and puts them in the OpenAPI document
+# (openapi.yaml). The pages with many nested figures (menu, dishes, inventory, supplier, profit and loss,
+# summary) are documented as JSON objects.
+
+class Problem(BaseModel):
+    """The body of every 401, 404 and business-rule 422 answer."""
+
+    detail: str
+
+
+class Created(BaseModel):
+    id: int
+    name: str
+
+
+class DishCreated(BaseModel):
+    code: str = Field(description="Code given to the dish from its name, e.g. TIR01")
+    name: str
+
+
+class DishOut(BaseModel):
+    code: str
+    name: str
+    category: str
+    price: float
+    recipe: List[RecipeLineIn]
+
+
+class IngredientCreated(BaseModel):
+    name: str
+    supplier_id: int = Field(description="Its supplier, which may have been created with it")
+
+
+class IngredientOut(BaseModel):
+    id: int
+    name: str
+    unit: str
+    unit_cost: float
+    supplier_id: int
+    counted_stock: float
+    counted_at: date
+    reorder_level: float
+
+
+class PurchaseCreated(BaseModel):
+    supplier_id: int
+    ingredient_id: int
+
+
+class ExpenseCreated(BaseModel):
+    description: str
+    month: str = Field(description="The month it belongs to, YYYY-MM")
+
+
+class CoversRow(BaseModel):
+    day: date
+    hour: int = Field(ge=0, le=23)
+    covers: int = Field(description="Diners in that hour of that day")
+
+
+class CoversOut(BaseModel):
+    """What the personnel service receives from GET /sales/covers (the seam, ADR-6)."""
+
+    covers: List[CoversRow]
+    open_days: List[date] = Field(description="Every day with at least one order")

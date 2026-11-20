@@ -14,6 +14,10 @@ from database import get_db
 
 router = APIRouter(tags=["accounts"])
 
+# Documented answers besides the success one (the body is {"detail": "<message>"})
+NO_TOKEN = {401: {"description": "Missing, invalid or expired token, or the account no longer exists"}}
+EMAIL_IN_USE = {409: {"description": "There is already an account with that email"}}
+
 EMAIL_TAKEN = "There is already an account with that email"
 WRONG_LOGIN = "The email or the password is not correct"
 
@@ -28,7 +32,8 @@ def _session(user):
     }
 
 
-@router.post("/auth/login", response_model=SessionOut)
+@router.post("/auth/login", response_model=SessionOut,
+             responses={401: {"description": "The email or the password is not correct"}})
 def login(credentials: LoginIn, conn=Depends(get_db)):
     user = services.authenticate(conn, credentials.email, credentials.password)
     if user is None:
@@ -37,7 +42,7 @@ def login(credentials: LoginIn, conn=Depends(get_db)):
     return _session(user)
 
 
-@router.post("/auth/register", response_model=SessionOut, status_code=201)
+@router.post("/auth/register", response_model=SessionOut, status_code=201, responses=EMAIL_IN_USE)
 def register(account: RegisterIn, conn=Depends(get_db)):
     """Creates a restaurant with its first manager and logs them in. A new restaurant starts empty."""
     if services.email_taken(conn, account.email):
@@ -47,7 +52,7 @@ def register(account: RegisterIn, conn=Depends(get_db)):
     return _session(repository.get_user(conn, user_id))
 
 
-@router.post("/auth/refresh", response_model=SessionOut)
+@router.post("/auth/refresh", response_model=SessionOut, responses=NO_TOKEN)
 def refresh(user=Depends(current_user)):
     """A new token for a manager whose current token is still valid.
 
@@ -57,18 +62,19 @@ def refresh(user=Depends(current_user)):
     return _session(user)
 
 
-@router.get("/auth/me", response_model=ManagerOut)
+@router.get("/auth/me", response_model=ManagerOut, responses=NO_TOKEN)
 def me(user=Depends(current_user)):
     return {"id": user["id"], "name": user["name"], "email": user["email"]}
 
 
-@router.get("/account/managers", response_model=list[ManagerOut])
+@router.get("/account/managers", response_model=list[ManagerOut], responses=NO_TOKEN)
 def list_managers(conn=Depends(get_db), user=Depends(current_user)):
     """Every manager of the logged-in manager's restaurant, and only of that restaurant."""
     return repository.get_managers(conn, user["restaurant_id"])
 
 
-@router.post("/account/managers", response_model=ManagerOut, status_code=201)
+@router.post("/account/managers", response_model=ManagerOut, status_code=201,
+             responses={**NO_TOKEN, **EMAIL_IN_USE})
 def add_manager(manager: ManagerIn, conn=Depends(get_db), user=Depends(current_user)):
     """Gives another person their own login to the same restaurant."""
     if services.email_taken(conn, manager.email):

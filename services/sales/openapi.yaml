@@ -1,0 +1,1063 @@
+openapi: 3.1.0
+info:
+  title: ManageEAT sales
+  version: 0.1.0
+paths:
+  /sales/menu:
+    get:
+      tags:
+      - sales
+      summary: Menu
+      description: Every dish classified as star, plowhorse, puzzle or dog, by category, most sold first.
+      operationId: menu_sales_menu_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Menu Sales Menu Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+  /sales/dishes:
+    get:
+      tags:
+      - sales
+      summary: Dishes
+      description: The menu with the cost and margin of every dish, and the ingredients a recipe can use.
+      operationId: dishes_sales_dishes_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Dishes Sales Dishes Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - sales
+      summary: Create Dish
+      operationId: create_dish_sales_dishes_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DishIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DishCreated'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /sales/dishes/{code}:
+    get:
+      tags:
+      - sales
+      summary: Get Dish
+      description: One dish and its recipe, to fill the edit form.
+      operationId: get_dish_sales_dishes__code__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Code
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DishOut'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - sales
+      summary: Update Dish
+      description: Replaces the dish's name, category, price and whole recipe.
+      operationId: update_dish_sales_dishes__code__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DishIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DishCreated'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sales/inventory:
+    get:
+      tags:
+      - sales
+      summary: Inventory
+      description: Current stock of every ingredient (as of the last day with orders), what to reorder, and the suppliers.
+      operationId: inventory_sales_inventory_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Inventory Sales Inventory Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+  /sales/ingredients:
+    post:
+      tags:
+      - sales
+      summary: Create Ingredient
+      description: A new ingredient with its first stock count, bought from an existing supplier or a new one.
+      operationId: create_ingredient_sales_ingredients_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngredientIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngredientCreated'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /sales/ingredients/{ingredient_id}:
+    get:
+      tags:
+      - sales
+      summary: Get Ingredient
+      operationId: get_ingredient_sales_ingredients__ingredient_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: ingredient_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Ingredient Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngredientOut'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - sales
+      summary: Update Ingredient
+      description: Same rules as a new ingredient, but it can only move to a supplier that already exists.
+      operationId: update_ingredient_sales_ingredients__ingredient_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: ingredient_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Ingredient Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngredientIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngredientCreated'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sales/suppliers:
+    post:
+      tags:
+      - sales
+      summary: Create Supplier
+      description: A new supplier, which can take over some existing ingredients.
+      operationId: create_supplier_sales_suppliers_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Created'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /sales/suppliers/{supplier_id}:
+    get:
+      tags:
+      - sales
+      summary: Get Supplier
+      description: A supplier with the products it sells, their stock, and its delivery history.
+      operationId: get_supplier_sales_suppliers__supplier_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: supplier_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Supplier Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Supplier Sales Suppliers  Supplier Id  Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - sales
+      summary: Update Supplier
+      description: Changes a supplier's name and contact; same rules as a new supplier (phone or email required).
+      operationId: update_supplier_sales_suppliers__supplier_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: supplier_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Supplier Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Created'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sales/suppliers/{supplier_id}/purchases:
+    post:
+      tags:
+      - sales
+      summary: Record Purchase
+      description: A delivery from the supplier; it only delivers the products it sells.
+      operationId: record_purchase_sales_suppliers__supplier_id__purchases_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: supplier_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Supplier Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseCreated'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Not found in the manager's restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sales/profit-loss:
+    get:
+      tags:
+      - sales
+      summary: Profit Loss
+      description: 'The monthly statement, week by week, and the history of every month.
+
+
+        Wages come from personnel. If it does not answer, the last wages received are used and `wages` says
+
+        from when; if there are none, every figure that depends on wages is null, while revenue, ingredients
+
+        and fixed costs are still shown (ADR-6).'
+      operationId: profit_loss_sales_profit_loss_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: month
+        in: query
+        required: false
+        schema:
+          type: string
+          title: Month
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Profit Loss Sales Profit Loss Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sales/expenses:
+    post:
+      tags:
+      - sales
+      summary: Create Fixed Expense
+      operationId: create_fixed_expense_sales_expenses_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FixedExpenseIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCreated'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /sales/summary:
+    get:
+      tags:
+      - sales
+      summary: Summary
+      description: The sales figures of the overview page, for the month the profit and loss opens on.
+      operationId: summary_sales_summary_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Summary Sales Summary Get
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+  /sales/covers:
+    get:
+      tags:
+      - sales
+      summary: Covers
+      description: 'Diners per day and hour, and the days the restaurant was open: what personnel needs for the schedule.'
+      operationId: covers_sales_covers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoversOut'
+        '401':
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - HTTPBearer: []
+  /health:
+    get:
+      tags:
+      - health
+      summary: Health
+      description: 200 with db "ok" if the service can use its own database; 503 with db "error" if it cannot.
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: The service cannot write to or read from its database
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  schemas:
+    CoversOut:
+      properties:
+        covers:
+          items:
+            $ref: '#/components/schemas/CoversRow'
+          type: array
+          title: Covers
+        open_days:
+          items:
+            type: string
+            format: date
+          type: array
+          title: Open Days
+          description: Every day with at least one order
+      type: object
+      required:
+      - covers
+      - open_days
+      title: CoversOut
+      description: What the personnel service receives from GET /sales/covers (the seam, ADR-6).
+    CoversRow:
+      properties:
+        day:
+          type: string
+          format: date
+          title: Day
+        hour:
+          type: integer
+          maximum: 23.0
+          minimum: 0.0
+          title: Hour
+        covers:
+          type: integer
+          title: Covers
+          description: Diners in that hour of that day
+      type: object
+      required:
+      - day
+      - hour
+      - covers
+      title: CoversRow
+    Created:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - id
+      - name
+      title: Created
+    DishCreated:
+      properties:
+        code:
+          type: string
+          title: Code
+          description: Code given to the dish from its name, e.g. TIR01
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - code
+      - name
+      title: DishCreated
+    DishIn:
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          minLength: 2
+          title: Name
+        category:
+          type: string
+          enum:
+          - main
+          - starter
+          - dessert
+          - drink
+          title: Category
+        price:
+          type: number
+          maximum: 500.0
+          exclusiveMinimum: 0.0
+          title: Price
+        recipe:
+          items:
+            $ref: '#/components/schemas/RecipeLineIn'
+          type: array
+          title: Recipe
+      type: object
+      required:
+      - name
+      - category
+      - price
+      - recipe
+      title: DishIn
+      description: A new dish added from the menu page, with its recipe.
+    DishOut:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        category:
+          type: string
+          title: Category
+        price:
+          type: number
+          title: Price
+        recipe:
+          items:
+            $ref: '#/components/schemas/RecipeLineIn'
+          type: array
+          title: Recipe
+      type: object
+      required:
+      - code
+      - name
+      - category
+      - price
+      - recipe
+      title: DishOut
+    ExpenseCreated:
+      properties:
+        description:
+          type: string
+          title: Description
+        month:
+          type: string
+          title: Month
+          description: The month it belongs to, YYYY-MM
+      type: object
+      required:
+      - description
+      - month
+      title: ExpenseCreated
+    FixedExpenseIn:
+      properties:
+        description:
+          type: string
+          maxLength: 80
+          minLength: 2
+          title: Description
+        amount:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Amount
+        month:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+          title: Month
+      type: object
+      required:
+      - description
+      - amount
+      - month
+      title: FixedExpenseIn
+      description: A monthly fixed expense (rent, electricity...) added from the profit and loss page.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    Health:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - error
+          title: Status
+        db:
+          type: string
+          enum:
+          - ok
+          - error
+          title: Db
+        version:
+          type: string
+          title: Version
+      type: object
+      required:
+      - status
+      - db
+      - version
+      title: Health
+    IngredientCreated:
+      properties:
+        name:
+          type: string
+          title: Name
+        supplier_id:
+          type: integer
+          title: Supplier Id
+          description: Its supplier, which may have been created with it
+      type: object
+      required:
+      - name
+      - supplier_id
+      title: IngredientCreated
+    IngredientIn:
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          minLength: 2
+          title: Name
+        unit:
+          type: string
+          enum:
+          - kg
+          - l
+          - unit
+          title: Unit
+        unit_cost:
+          type: number
+          maximum: 1000.0
+          exclusiveMinimum: 0.0
+          title: Unit Cost
+        counted_stock:
+          type: number
+          minimum: 0.0
+          title: Counted Stock
+        reorder_level:
+          type: number
+          minimum: 0.0
+          title: Reorder Level
+        counted_at:
+          type: string
+          format: date
+          title: Counted At
+        supplier_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Supplier Id
+        new_supplier:
+          anyOf:
+          - $ref: '#/components/schemas/SupplierIn'
+          - type: 'null'
+      type: object
+      required:
+      - name
+      - unit
+      - unit_cost
+      - counted_stock
+      - reorder_level
+      - counted_at
+      title: IngredientIn
+      description: 'A new ingredient added from the inventory page.
+
+
+        It is bought either from a supplier we already have (supplier_id) or from a new one (new_supplier),
+
+        never both.'
+    IngredientOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+        unit:
+          type: string
+          title: Unit
+        unit_cost:
+          type: number
+          title: Unit Cost
+        supplier_id:
+          type: integer
+          title: Supplier Id
+        counted_stock:
+          type: number
+          title: Counted Stock
+        counted_at:
+          type: string
+          format: date
+          title: Counted At
+        reorder_level:
+          type: number
+          title: Reorder Level
+      type: object
+      required:
+      - id
+      - name
+      - unit
+      - unit_cost
+      - supplier_id
+      - counted_stock
+      - counted_at
+      - reorder_level
+      title: IngredientOut
+    Problem:
+      properties:
+        detail:
+          type: string
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: Problem
+      description: The body of every 401, 404 and business-rule 422 answer.
+    PurchaseCreated:
+      properties:
+        supplier_id:
+          type: integer
+          title: Supplier Id
+        ingredient_id:
+          type: integer
+          title: Ingredient Id
+      type: object
+      required:
+      - supplier_id
+      - ingredient_id
+      title: PurchaseCreated
+    PurchaseIn:
+      properties:
+        ingredient_id:
+          type: integer
+          title: Ingredient Id
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        unit_price:
+          type: number
+          minimum: 0.0
+          title: Unit Price
+        received_on:
+          type: string
+          format: date
+          title: Received On
+      type: object
+      required:
+      - ingredient_id
+      - quantity
+      - unit_price
+      - received_on
+      title: PurchaseIn
+      description: A delivery recorded from a supplier's page.
+    RecipeLineIn:
+      properties:
+        ingredient_id:
+          type: integer
+          title: Ingredient Id
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+      type: object
+      required:
+      - ingredient_id
+      - quantity
+      title: RecipeLineIn
+      description: One ingredient of a recipe and how much of it one portion uses.
+    SupplierIn:
+      properties:
+        name:
+          type: string
+          maxLength: 80
+          minLength: 2
+          title: Name
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 30
+          - type: 'null'
+          title: Phone
+        email:
+          anyOf:
+          - type: string
+            maxLength: 120
+          - type: 'null'
+          title: Email
+        lead_time_days:
+          type: integer
+          maximum: 60.0
+          minimum: 0.0
+          title: Lead Time Days
+        ingredient_ids:
+          items:
+            type: integer
+          type: array
+          title: Ingredient Ids
+          default: []
+      type: object
+      required:
+      - name
+      - lead_time_days
+      title: SupplierIn
+      description: A new supplier sent from the inventory form.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer

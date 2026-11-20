@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=./system.schema.json
+# What the system is made of: each service, every environment variable it reads, its calls across the
+# seam and its Azure resources (A2 §8a). CI validates this file against system.schema.json, and
+# tests/system checks it against the code: the variables in each config.py, the endpoints in each
+# openapi.yaml and the services in docker-compose.yml.
+student: liglesias.ieu2024
+prefix: liglesias-ieu2024
+public_url: https://liglesiasieu2024ui.z6.web.core.windows.net
+ui:
+  path: ui
+  storage_account: liglesiasieu2024ui
+  calls: [personnel, sales]
+azure:
+  resource_group: rg-liglesias-ieu2024
+  container_apps_environment: liglesias-ieu2024-env
+  sql_server: liglesias-ieu2024-sql
+  registry: ghcr.io/liglesias1
+services:
+  personnel:
+    description: Restaurants and their managers (login and tokens), roles, employees, clock-ins, payroll and the staffing schedule.
+    path: services/personnel
+    openapi: services/personnel/openapi.yaml
+    port_default: 8000
+    health: /health
+    migrations: services/personnel/migrations
+    env:
+      PORT: { default: 8000, description: "Port the service listens on" }
+      DATABASE_URL: { secret: true, description: "Connection string of the personnel database with its own login: mssql://personnel_app:<password>@<host>:1433/<database>" }
+      DB_CONNECT_RETRY_S: { default: 90, description: "Seconds to keep retrying the connection while the database starts or resumes from pause" }
+      SEED_DEMO_DATA: { default: "true", description: "Load the demo restaurant into an empty database on startup" }
+      TOKEN_SECRET: { secret: true, description: "Signs the login tokens; sales checks them with the same value" }
+      TOKEN_MINUTES: { default: 15, description: "Minutes a login token is valid" }
+      SALES_URL: { default: "http://sales:8000", description: "Base URL of the sales service" }
+      SALES_TIMEOUT_S: { default: 5, description: "Seconds to wait for sales before using the last covers received" }
+      GIT_SHA: { default: dev, description: "Commit the image was built from, reported by /health as version" }
+      CORS_ORIGINS: { default: "http://localhost:8080", description: "Comma-separated origins whose pages may call the service from the browser (the UI)" }
+    calls:
+      - service: sales
+        url_env: SALES_URL
+        endpoints: ["GET /sales/covers"]
+        timeout_s: 5
+        on_failure: The schedule uses the last covers received from sales, with their date (snapshot); if there are none it is not shown and says the demand is unavailable, while staff and payroll keep working.
+    azure:
+      container_app: liglesias-ieu2024-personnel
+      sql_database: liglesias-ieu2024-personnel-db
+  sales:
+    description: Menu, recipes, ingredients, suppliers, deliveries, stock, fixed expenses, menu engineering and the profit and loss statement.
+    path: services/sales
+    openapi: services/sales/openapi.yaml
+    port_default: 8000
+    health: /health
+    migrations: services/sales/migrations
+    env:
+      PORT: { default: 8000, description: "Port the service listens on" }
+      DATABASE_URL: { secret: true, description: "Connection string of the sales database with its own login: mssql://sales_app:<password>@<host>:1433/<database>" }
+      DB_CONNECT_RETRY_S: { default: 90, description: "Seconds to keep retrying the connection while the database starts or resumes from pause" }
+      SEED_DEMO_DATA: { default: "true", description: "Load the demo restaurant's sales data into an empty database on startup" }
+      TOKEN_SECRET: { secret: true, description: "Checks the login tokens that personnel signs (the same value as in personnel)" }
+      PERSONNEL_URL: { default: "http://personnel:8000", description: "Base URL of the personnel service" }
+      PERSONNEL_TIMEOUT_S: { default: 5, description: "Seconds to wait for personnel before using the last wage costs received" }
+      GIT_SHA: { default: dev, description: "Commit the image was built from, reported by /health as version" }
+      CORS_ORIGINS: { default: "http://localhost:8080", description: "Comma-separated origins whose pages may call the service from the browser (the UI)" }
+    calls:
+      - service: personnel
+        url_env: PERSONNEL_URL
+        endpoints: ["GET /personnel/labor-cost"]
+        timeout_s: 5
+        on_failure: Profit and loss uses the last wage cost received for each period, with its date (snapshot); if there is none, wages, labour cost and net profit are shown as unavailable while revenue, ingredients and fixed costs are still shown.
+    azure:
+      container_app: liglesias-ieu2024-sales
+      sql_database: liglesias-ieu2024-sales-db
