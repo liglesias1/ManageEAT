@@ -130,7 +130,7 @@ class IngredientIn(BaseModel):
         if (self.supplier_id is None) == (self.new_supplier is None):
             raise ValueError("choose an existing supplier or add a new one")
         return self
-    
+
 # ---------- What the API answers ----------
 # Response models: FastAPI checks every answer against them and puts them in the OpenAPI document
 # (openapi.yaml). The pages with many nested figures (menu, dishes, inventory, supplier, profit and loss,
