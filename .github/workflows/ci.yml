@@ -1,0 +1,163 @@
+# CI: runs on every push to a branch other than main and on every pull request, and the CD workflow calls it
+# (workflow_call) on every push to main, so a commit is only deployed after it passed here (A2 §5).
+#
+# Jobs, in parallel where they do not depend on each other:
+#   lint         ruff over the whole repository
+#   unit-tests   each service's tests against a throwaway SQL Server, failing below 70% coverage of its core logic
+#   system       system.yaml against system.schema.json, both openapi.yaml against the OpenAPI specification,
+#                and tests/system (the files say what the code does)
+#   images       builds both Docker images; a failed build fails the pipeline
+#   integration  the whole compose stack, with the cross-seam tests and each service stopped in turn
+#
+# CI never touches Azure: every database here is a SQL Server container that lives only for the job, with a
+# random password generated in the job and masked in the logs. No secret is stored in this file.
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]       # main is tested by the CD workflow, which calls this one first
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"          # the same Python as the images
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ruff==0.17.5
+      - name: Lint (settings in ruff.toml)
+        run: ruff check --output-format=github .
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false            # one service failing still shows the other's result
+      matrix:
+        include:
+          - service: personnel
+            core: --cov=domain --cov=accounts
+          - service: sales
+            core: --cov=domain --cov=auth
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: services/${{ matrix.service }}/requirements*.txt
+      - name: Install (the image's exact versions, plus the test tools)
+        run: pip install -r requirements-dev.txt -c constraints.txt
+      - name: Start a throwaway SQL Server
+        run: |
+          password="$(openssl rand -hex 16)Aa1-"
+          echo "::add-mask::$password"
+          echo "TEST_SQLSERVER_URL=mssql://sa:${password}@localhost:1433/master" >> "$GITHUB_ENV"
+          docker run -d --name sqlserver -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$password" -p 1433:1433 \
+            mcr.microsoft.com/mssql/server:2022-latest
+          for attempt in $(seq 1 60); do
+            if docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$password" -C \
+                 -Q "SELECT 1" -b -o /dev/null; then
+              echo "SQL Server ready after $((attempt * 2)) s"; exit 0
+            fi
+            sleep 2
+          done
+          docker logs sqlserver; exit 1
+      - name: Tests, failing below 70% coverage of the core logic
+        run: python -m pytest ${{ matrix.core }} --cov-report=term-missing --cov-fail-under=70 -q
+      - name: Coverage in the job summary
+        if: always()
+        run: |
+          echo "### ${{ matrix.service }}: coverage of the core logic" >> "$GITHUB_STEP_SUMMARY"
+          python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+  system:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r tests/system/requirements.txt
+      - name: Validate system.yaml against system.schema.json
+        run: pipx run --spec check-jsonschema==0.39.0 check-jsonschema --schemafile system.schema.json system.yaml
+      - name: Validate each openapi.yaml against the OpenAPI specification
+        run: openapi-spec-validator services/personnel/openapi.yaml services/sales/openapi.yaml
+      - name: Check system.yaml and the OpenAPI documents against the code
+        run: python -m pytest tests/system -v
+
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [personnel, sales]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the ${{ matrix.service }} image
+        uses: docker/build-push-action@v7
+        with:
+          context: services/${{ matrix.service }}
+          push: false
+          provenance: false
+          build-args: GIT_SHA=${{ github.sha }}
+          tags: manageeat-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: images                 # no point starting the stack if an image does not build
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r tests/integration/requirements.txt
+      - name: Write a throwaway .env with random passwords
+        run: |
+          sa="$(openssl rand -hex 16)Aa1-"
+          sales="$(openssl rand -hex 16)Aa1-"
+          personnel="$(openssl rand -hex 16)Aa1-"
+          token="$(openssl rand -hex 32)"
+          for value in "$sa" "$sales" "$personnel" "$token"; do echo "::add-mask::$value"; done
+          printf 'MSSQL_SA_PASSWORD=%s\nSALES_DB_PASSWORD=%s\nPERSONNEL_DB_PASSWORD=%s\nTOKEN_SECRET=%s\n' \
+            "$sa" "$sales" "$personnel" "$token" > .env
+      - name: Start the whole system with docker compose
+        run: GIT_SHA=${{ github.sha }} docker compose up --build -d
+      - name: Wait until both services are healthy
+        run: |
+          for attempt in $(seq 1 90); do
+            if curl -sf localhost:8001/health && curl -sf localhost:8002/health; then echo; exit 0; fi
+            sleep 2
+          done
+          docker compose ps; exit 1
+      - name: Integration tests across the seam, stopping each service in turn
+        env:
+          PERSONNEL_URL: http://localhost:8001
+          SALES_URL: http://localhost:8002
+          CAN_STOP_SERVICES: "1"
+        run: python -m pytest tests/integration -v
+      - name: Logs of the stack (only when something failed)
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=200
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
