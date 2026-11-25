@@ -1,0 +1,10 @@
+# Lint settings for the whole repository; CI runs `ruff check .` on every push and pull request.
+line-length = 125                 # the longest lines in the code are SQL and docstrings of up to 123 characters
+target-version = "py39"           # the oldest Python the code must run on (the images use 3.12)
+
+[lint]
+select = ["E", "F", "W"]          # pycodestyle errors and warnings, and pyflakes (unused or undefined names)
+
+[lint.per-file-ignores]
+# Tests keep each SQL INSERT on one line, build objects with short lambdas and use `l` for a recipe line
+"**/tests/**" = ["E501", "E731", "E741"]

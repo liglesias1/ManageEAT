@@ -1,0 +1,5 @@
+# Tools for the system description checks (tests/system), which only read files: no services needed.
+pytest==8.4.2                   # runs the checks
+PyYAML==6.0.3                   # reads system.yaml, the OpenAPI documents and docker-compose.yml
+jsonschema==4.23.0              # validates system.yaml against system.schema.json
+openapi-spec-validator==0.7.2   # validates each openapi.yaml against the OpenAPI specification
